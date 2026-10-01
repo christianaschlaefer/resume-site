@@ -50,6 +50,7 @@ module.exports = async function handler(req, res) {
 
     const data = await anthropicResponse.json();
     const selection = extractSelection(data, curatedEntries);
+    console.log(`compile-resume: succeeded with ${selection.experiences.length} experiences`);
     return res.status(200).json(selection);
   } catch (error) {
     console.error("Resume compilation failed:", error);
@@ -63,7 +64,8 @@ function extractSelection(apiResponse, curatedEntries) {
     const parsed = JSON.parse(textBlock.text);
     if (!Array.isArray(parsed.experiences)) throw new Error("Malformed response");
     return parsed;
-  } catch {
+  } catch (parseError) {
+    console.error("compile-resume: failed to parse Claude's response, using mechanical fallback:", parseError);
     return mechanicalFallback(curatedEntries);
   }
 }

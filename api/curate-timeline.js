@@ -19,6 +19,7 @@ module.exports = async function handler(req, res) {
   // the original mock's "generic fallback" behavior, and saves a real
   // API call for a case that genuinely needs no judgment.
   if (trimmed.length === 0) {
+    console.log("curate-timeline: blank input — skipping API call, returning all entries");
     return res.status(200).json({ includedIds: allIds });
   }
 
@@ -56,6 +57,7 @@ module.exports = async function handler(req, res) {
 
     const data = await anthropicResponse.json();
     const includedIds = extractIncludedIds(data, allIds);
+    console.log(`curate-timeline: succeeded, included ${includedIds.length} of ${allIds.length} entries`);
     return res.status(200).json({ includedIds });
   } catch (error) {
     console.error("Curation failed:", error);
@@ -76,7 +78,11 @@ function extractIncludedIds(apiResponse, allIds) {
     // case the model hallucinates or formats something unexpectedly.
     const filtered = parsed.includedIds.filter((id) => validIds.has(id));
     return filtered.length > 0 ? filtered : allIds;
-  } catch {
+  } catch (parseError) {
+    // The API call itself succeeded, but the reply wasn't in the
+    // expected shape — distinct from a network/auth failure, and worth
+    // telling apart in the logs since the fix is different.
+    console.error("curate-timeline: failed to parse Claude's response:", parseError);
     return allIds;
   }
 }
