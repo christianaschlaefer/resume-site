@@ -100,10 +100,9 @@ function renderLandingTile() {
     <form id="job-intake-form">
       <label class="sr-only" for="job-description">Job description</label>
       <textarea id="job-description" placeholder="Paste a job description, or just describe the role..."></textarea>
-      <button type="submit">Get Started</button>
+      <button type="submit" id="intake-submit" aria-live="polite">Get Started</button>
     </form>
-    <p id="intake-loading" role="status" hidden>One moment while I run to the filing cabinet&hellip;</p>
-    <p id="intake-complete" hidden>Scroll right to explore your tailored timeline &rarr;</p>
+    <button id="match-new-role" type="button" hidden>Match to a New Role</button>
   `;
   // Full-width by CSS (.tile--landing). Because it fills the entire
   // viewport and sits first in the track, the first real Experience
@@ -127,24 +126,66 @@ let lastJobDescription = "";   // stored for the same reason
 
 function setupJobIntake(track) {
   const form = document.getElementById("job-intake-form");
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const jobDescription = document.getElementById("job-description").value;
+    const textarea = document.getElementById("job-description");
+    const button = document.getElementById("intake-submit");
+
+    // Once curation has already run, this same button acts as the
+    // "Explore" call-to-action instead of a resubmit trigger — a new
+    // job description only ever comes in through the deliberate
+    // "Match to a New Role" reset (see below), never by pressing this
+    // button again. That's intentional: letting this one re-submit was
+    // the source of the persistence issues mentioned earlier.
+    if (lastCuration) {
+      scrollToFirstRealTile();
+      return;
+    }
+
+    const jobDescription = textarea.value;
     lastJobDescription = jobDescription;
 
-    form.hidden = true;
-    document.getElementById("intake-loading").hidden = false;
+    textarea.hidden = true;
+    button.disabled = true;
+    button.textContent = "Thinking…";
     document.dispatchEvent(new CustomEvent("intake:submitted", { detail: { jobDescription } }));
 
     const curation = await runJobCuration(jobDescription);
     lastCuration = curation;
     appendCuratedTimeline(track, curation);
 
-    document.getElementById("intake-loading").hidden = true;
-    document.getElementById("intake-complete").hidden = false;
+    button.disabled = false;
+    button.textContent = "Explore →";
     document.dispatchEvent(new CustomEvent("timeline:curated", { detail: curation }));
   });
 }
+
+function scrollToFirstRealTile() {
+  if (tileElements.length < 2) return;
+  tileElements[1].scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+}
+
+// Shows "Match to a New Role" only once the visitor has actually seen
+// the resume and scrolled back to landing — not on first load, and not
+// while they're still exploring mid-timeline.
+document.addEventListener("timeline:activechange", (e) => {
+  const newRoleButton = document.getElementById("match-new-role");
+  if (!newRoleButton) return;
+  newRoleButton.hidden = !(e.detail.entry.type === "landing" && resumeRendered);
+});
+
+// A full reload is the deliberate choice here, not a shortcut: this
+// app has a lot of interdependent state (render queue, skill levels,
+// curation, cached resume HTML). Hand-resetting all of it correctly
+// is real surface area for bugs — a reload resets everything by
+// construction, with no risk of leftover stale state anywhere.
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#match-new-role")) return;
+  if (confirm("This will reset the timeline so you can match to a different role. Continue?")) {
+    location.reload();
+  }
+});
 
 async function runJobCuration(jobDescription) {
   try {
@@ -693,6 +734,81 @@ function renderResumeExperience({ entry, bulletTexts }) {
   `;
 }
 
+// ============================================================
+// TWO-PAGE ENFORCEMENT
+// Measurement is mechanical (it has to be — it's just geometry), but
+// fixing an overflow is NOT handled by a mechanical trim rule. Deciding
+// what to shorten or cut is an editorial judgment call about what
+// actually matters most to this resume's effectiveness, so an overflow
+// sends the draft back to the LLM for a genuine revision pass instead
+// of a script blindly cutting "whichever entry has the most bullets."
+// ============================================================
+
+// US Letter at 0.5in margins (matches the @page rule in style.css).
+// `in` is a CSS absolute unit — 96px always equals 1in regardless of
+// screen DPI, so this works identically whether measured on-screen or
+// mapped to an actual printed page.
+const PAGE_CONTENT_WIDTH_IN = 8.5 - 1; // 8.5in page minus 0.5in each side
+const PAGE_CONTENT_HEIGHT_PX = (11 - 1) * 96; // 10in of content, in px
+
+// Renders the given html into an invisible, fixed-width clone sized to
+// match a real printed page's content area, then reads its actual
+// height — this is why the estimate is accurate even though the
+// visible page is much wider than a real sheet of paper.
+function estimatePageCount(html) {
+  const measurer = document.createElement("div");
+  measurer.style.cssText =
+    `position: fixed; visibility: hidden; pointer-events: none; ` +
+    `top: -99999px; left: -99999px; width: ${PAGE_CONTENT_WIDTH_IN}in;`;
+  measurer.innerHTML = html;
+  document.body.appendChild(measurer);
+  const totalHeightPx = measurer.scrollHeight;
+  document.body.removeChild(measurer);
+  return Math.ceil(totalHeightPx / PAGE_CONTENT_HEIGHT_PX);
+}
+
+// Measures the compiled resume and, if it's too long, sends it back to
+// compile-resume in "revision" mode so the LLM itself decides how to
+// tighten it — capped at 2 attempts for cost/latency. If it's still
+// slightly over after that, the overflow is accepted as-is: a resume
+// that runs a few lines onto page 3 is a far safer outcome than one
+// where a script deleted something that might have mattered.
+async function fitResumeToTwoPages(selection, curatedEntries) {
+  let current = selection;
+  let html = renderResume(buildResumeData(current));
+  let pages = estimatePageCount(html);
+
+  const maxRevisions = 2;
+  for (let attempt = 0; attempt < maxRevisions && pages > 2; attempt++) {
+    const revised = await requestResumeRevision(curatedEntries, current, pages);
+    if (!revised) break; // revision call itself failed — stop rather than loop on nothing
+    current = revised;
+    html = renderResume(buildResumeData(current));
+    pages = estimatePageCount(html);
+  }
+
+  return html;
+}
+
+async function requestResumeRevision(curatedEntries, previousSelection, estimatedPages) {
+  try {
+    const response = await fetch("/api/compile-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobDescription: lastJobDescription,
+        curatedEntries,
+        revision: { previousSelection, estimatedPages }
+      })
+    });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("Resume revision request failed:", error);
+    return null;
+  }
+}
+
 // Renders once, the first time the visitor actually reaches the
 // outro — not on page load. resumeRendering guards against the async
 // API call below overlapping if activechange fires again mid-load.
@@ -704,6 +820,7 @@ async function compileResume() {
     ? timeline.filter((e) => lastCuration.includedIds.includes(e.id))
     : timeline;
 
+  let selection;
   try {
     const response = await fetch("/api/compile-resume", {
       method: "POST",
@@ -711,12 +828,36 @@ async function compileResume() {
       body: JSON.stringify({ jobDescription: lastJobDescription, curatedEntries })
     });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-    return await response.json();
+    selection = await response.json();
   } catch (error) {
     console.error("Resume compilation request failed, using mechanical fallback:", error);
-    return lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
+    selection = lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
   }
+
+  // Measuring and, if needed, revising for length happens here — after
+  // compilation succeeds or falls back, but before anything is rendered
+  // to the page, so the caller always receives final, fit-checked HTML.
+  return fitResumeToTwoPages(selection, curatedEntries);
 }
+
+// ============================================================
+// RESUME PREFETCH
+// Starts resume compilation the moment the visitor scrolls past the
+// welcome segment, rather than waiting until they reach the very end.
+// This is safe to do this early because curation (lastCuration) is
+// already fully finalized the instant any tile beyond landing exists —
+// there's no "too early" risk of working from incomplete data. Trades
+// some wasted API calls (for visitors who never reach the end) for
+// eliminating a long wait for the ones who do.
+// ============================================================
+
+let resumeCompilePromise = null;
+
+document.addEventListener("timeline:activechange", (e) => {
+  if (e.detail.index > 0 && !resumeCompilePromise) {
+    resumeCompilePromise = compileResume();
+  }
+});
 
 // The overlay's visibility is driven by the SAME event that already
 // hides the skill archive — "is outro the currently active tile?" —
@@ -751,9 +892,12 @@ document.addEventListener("timeline:activechange", async (e) => {
   document.getElementById("resume-content").innerHTML =
     `<p role="status">One moment while I put together your resume&hellip;</p>`;
 
-  const selection = await compileResume();
+  // Reuses the prefetched call from above — by the time most visitors
+  // reach outro, this has already resolved (or is well underway), so
+  // this await returns close to instantly instead of starting fresh.
+  const html = await (resumeCompilePromise || compileResume());
 
-  document.getElementById("resume-content").innerHTML = renderResume(buildResumeData(selection));
+  document.getElementById("resume-content").innerHTML = html;
   resumeRendered = true;
   resumeRendering = false;
 

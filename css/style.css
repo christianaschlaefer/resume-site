@@ -104,11 +104,19 @@ body {
   cursor: pointer;
 }
 
-#intake-loading,
-#intake-complete {
-  margin-top: 16px;
-  font-style: italic;
-  color: #555;
+#job-intake-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#match-new-role {
+  margin-top: 20px;
+  padding: 8px 18px;
+  font: inherit;
+  background: none;
+  border: 1px solid #999;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 /* Achievements start fully collapsed via max-height:0 + hidden
@@ -315,67 +323,94 @@ body {
 }
 
 #resume-content {
-  max-width: 700px;
+  max-width: 7.5in; /* matches the actual printable width at 0.5in page margins */
   margin: 0 auto;
+  font-size: 10.5pt; /* pt units render identically on screen and in print,
+    so this is WYSIWYG — no separate print-only override needed */
+  line-height: 1.35;
 }
 
 .resume-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 14pt;
 }
 
 .resume-header h1 {
-  font-size: 1.8rem;
+  font-size: 20pt; /* matches your original template spec */
   margin: 0;
 }
 
 .resume-title {
+  font-size: 14pt; /* matches your original template spec */
   font-weight: bold;
-  margin: 4px 0;
+  margin: 2pt 0;
 }
 
 .resume-contact {
-  font-size: 0.85rem;
+  font-size: 10.5pt;
   color: #555;
 }
 
 .resume-section {
-  margin-bottom: 22px;
+  margin-bottom: 12pt;
 }
 
 .resume-section h2 {
-  font-size: 0.95rem;
+  font-size: 10.5pt;
+  font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-bottom: 1px solid #ccc;
-  padding-bottom: 4px;
-  margin-bottom: 10px;
+  padding-bottom: 3pt;
+  margin-bottom: 6pt;
+  /* Keeps a section header from ever being stranded alone at the
+     bottom of a page with its content pushed to the next one. */
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .resume-entry {
-  margin-bottom: 14px;
+  margin-bottom: 8pt;
+  /* THE fix for titles getting cut off from their own bullets: forces
+     the whole block (title + meta + bullets) to move together to the
+     next page rather than splitting across the boundary. */
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .resume-entry-title {
+  font-size: 10.5pt;
   font-weight: bold;
   margin: 0;
 }
 
 .resume-entry-meta {
   font-style: italic;
-  font-size: 0.85rem;
+  font-size: 10.5pt;
   color: #555;
-  margin: 2px 0 6px;
+  margin: 1pt 0 4pt;
 }
 
 .resume-entry ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 16pt;
+}
+
+.resume-entry li {
+  margin-bottom: 2pt;
 }
 
 .resume-project {
-  font-size: 0.9rem;
-  margin: 8px 0 0;
+  font-size: 10.5pt;
+  margin: 6pt 0 0;
+}
+
+/* Default browser print margins (~1in) eat significant space on a
+   dense single-page-style document — this matches the 0.5in margin
+   the page-fit measurement logic (see fitResumeToTwoPages in main.js)
+   assumes when calculating how much content actually fits. */
+@page {
+  margin: 0.5in;
 }
 
 #download-resume {
