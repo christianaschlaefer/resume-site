@@ -119,22 +119,18 @@ function renderOutroTile() {
 }
 
 // ============================================================
-// JOB INTAKE (mocked pending the real backend)
-// Returns the exact shape a real LLM curation call will eventually
-// return — { includedIds: [...] } — so swapping the mock body for a
-// real fetch() later is a one-line change, not a rewrite. The
-// keyword check below is NOT meant to look smart; it exists purely
-// to prove the render pipeline correctly handles a filtered subset
-// end-to-end before real intelligence is wired in.
+// JOB INTAKE — now calling the real /api/curate-timeline endpoint
 // ============================================================
 
-let lastCuration = null; // stored so the resume can reuse it later
+let lastCuration = null;       // stored so the resume compiler can reuse it
+let lastJobDescription = "";   // stored for the same reason
 
 function setupJobIntake(track) {
   const form = document.getElementById("job-intake-form");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const jobDescription = document.getElementById("job-description").value;
+    lastJobDescription = jobDescription;
 
     form.hidden = true;
     document.getElementById("intake-loading").hidden = false;
@@ -150,34 +146,34 @@ function setupJobIntake(track) {
   });
 }
 
-function runJobCuration(jobDescription) {
-  return new Promise((resolve) => {
-    // setTimeout stands in for real network latency — a genuine API
-    // call takes real time too, so testing against an instant mock
-    // would hide loading-state bugs a real one would expose.
-    setTimeout(() => {
-      const hasJobContext = jobDescription.trim().length > 0;
-      const includedIds = hasJobContext
-        ? ["exp-05", "exp-04", "exp-03", "pt-02", "exp-02"] // demo: a trimmed-down subset
-        : timeline.map((e) => e.id); // no context given — generic fallback, use everything
-      resolve({ includedIds });
-    }, 1800);
-  });
+async function runJobCuration(jobDescription) {
+  try {
+    const response = await fetch("/api/curate-timeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobDescription, timeline })
+    });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    // Fail open: show the full timeline rather than leaving the visitor
+    // stuck if the network request itself fails (not just the API call
+    // inside the function — this covers the function being unreachable).
+    console.error("Curation request failed, showing everything:", error);
+    return { includedIds: timeline.map((e) => e.id) };
+  }
 }
 
-// Derives a resumeSelection-shaped object directly from the timeline
-// curation, so the resume reflects the SAME included experiences
-// rather than staying on an independent, hardcoded selection. This is
-// intentionally mechanical (first eligible category, every bullet) —
-// the real per-bullet judgment and section-routing decisions are
-// exactly the "second pass" work the live LLM will eventually do here.
+// Mechanical fallback only — used if /api/compile-resume is unreachable
+// or errors, so the resume still renders something correct rather than
+// nothing. The real per-bullet judgment and synthesis happen server-side.
 function deriveResumeSelectionFromCuration(curation) {
   const experiences = timeline
     .filter((e) => e.type === "experience" && curation.includedIds.includes(e.id))
     .map((e) => ({
       id: e.id,
       section: (e.resumeCategories && e.resumeCategories[0]) || "professional",
-      bullets: e.achievements.map((_, i) => i)
+      bullets: e.achievements
     }));
   const points = timeline
     .filter((e) => e.type === "point" && curation.includedIds.includes(e.id))
@@ -589,9 +585,11 @@ function buildResumeData(selection) {
   selection.experiences.forEach((sel) => {
     const entry = timeline.find((e) => e.id === sel.id);
     if (!entry) return; // a stale/typo'd id shouldn't crash the whole resume
-    const bulletTexts = sel.bullets
-      .map((i) => entry.achievements[i])
-      .filter(Boolean);
+    // sel.bullets is now plain bullet TEXT, not indices — each one is
+    // either copied verbatim from entry.achievements, or a combined
+    // sentence synthesized by the real compiler when space was tight.
+    // Either way, the renderer just displays whatever text it's given.
+    const bulletTexts = (sel.bullets || []).filter(Boolean);
     const compiled = { entry, bulletTexts };
 
     if (sel.section === "professional") {
@@ -697,15 +695,27 @@ function renderResumeExperience({ entry, bulletTexts }) {
 
 // Renders once, the first time the visitor actually reaches the
 // outro — not on page load. resumeRendering guards against the async
-// mock delay below overlapping if activechange fires again mid-load.
+// API call below overlapping if activechange fires again mid-load.
 let resumeRendered = false;
 let resumeRendering = false;
 
-function mockResumeCompilationDelay() {
-  // Stands in for the real "second pass" compression/critique call —
-  // see the design discussion on why this is deliberately separate
-  // from the intake gate's loading moment, not the same one reused.
-  return new Promise((resolve) => setTimeout(resolve, 1500));
+async function compileResume() {
+  const curatedEntries = lastCuration
+    ? timeline.filter((e) => lastCuration.includedIds.includes(e.id))
+    : timeline;
+
+  try {
+    const response = await fetch("/api/compile-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobDescription: lastJobDescription, curatedEntries })
+    });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("Resume compilation request failed, using mechanical fallback:", error);
+    return lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
+  }
 }
 
 // The overlay's visibility is driven by the SAME event that already
@@ -741,14 +751,13 @@ document.addEventListener("timeline:activechange", async (e) => {
   document.getElementById("resume-content").innerHTML =
     `<p role="status">One moment while I put together your resume&hellip;</p>`;
 
-  const selection = lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
-  await mockResumeCompilationDelay();
+  const selection = await compileResume();
 
   document.getElementById("resume-content").innerHTML = renderResume(buildResumeData(selection));
   resumeRendered = true;
   resumeRendering = false;
 
-  // The visitor may have scrolled away DURING the simulated delay —
+  // The visitor may have scrolled away DURING the compilation call —
   // only force the overlay open if outro is still where they are.
   if (activeIndex === renderQueue.length - 1) {
     overlay.hidden = false;
