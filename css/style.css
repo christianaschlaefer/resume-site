@@ -1,0 +1,498 @@
+/* Structural layout only — enough to prove the scroll mechanics
+   work. Colors, type, spacing polish come in a dedicated later step. */
+
+body {
+  margin: 0;
+}
+
+/* Visually hidden but still reachable by screen readers — used for
+   form labels we want present for accessibility without duplicating
+   the placeholder text visually. Standard "sr-only" pattern: this is
+   NOT the same as display:none, which would hide it from AT too. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respects the OS-level "reduce motion" accessibility setting some
+   people rely on for motion sensitivity or vestibular disorders. This
+   overrides every transition/animation duration in the file at once,
+   rather than needing a reduced-motion variant of each one individually. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+#stage {
+  min-height: 100vh; /* CHANGED from a fixed height: this lets the
+    page grow taller than the screen when a tile expands, instead of
+    clipping it. Standard "sticky footer" flex pattern — fills the
+    screen exactly when content is short, grows naturally when it's not. */
+  display: flex;
+  flex-direction: column;
+}
+
+#track {
+  flex: 1;
+  display: flex;              /* lay tiles out left-to-right */
+  overflow-x: scroll;         /* the physical horizontal scrollbar */
+  scroll-snap-type: x mandatory; /* enables the "positive stops" */
+  /* overflow-y is intentionally left at its default now. Removing the
+     old `hidden` is what allows an expanded tile's extra height to
+     actually push the page taller instead of being clipped off. */
+}
+
+/* This targets tiles once main.js renders them in.
+   Each tile will get this class regardless of template type. */
+.tile {
+  flex: 0 0 auto;             /* don't shrink tiles to fit */
+  scroll-snap-align: center;  /* each tile is a stop, centered on snap */
+  width: 60vw;
+  max-width: 500px;
+  opacity: 0.35;               /* dimmed by default... */
+  transition: opacity 0.3s ease;
+}
+
+/* Tiles are fairly narrow on small phone screens at 60vw — this
+   widens them specifically below 600px so text isn't cramped, without
+   touching the desktop/tablet sizing above that. */
+@media (max-width: 600px) {
+  .tile {
+    width: 85vw;
+  }
+}
+
+.tile.is-active {
+  opacity: 1;                  /* ...full opacity when centered (Step 4 sets this class) */
+}
+
+#job-intake-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 16px;
+}
+
+#job-intake-form textarea {
+  min-height: 100px;
+  padding: 10px;
+  font: inherit;
+  border: 1px solid #999;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+#job-intake-form button {
+  padding: 10px 24px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#intake-loading,
+#intake-complete {
+  margin-top: 16px;
+  font-style: italic;
+  color: #555;
+}
+
+/* Achievements start fully collapsed via max-height:0 + hidden
+   overflow. This is a common lightweight technique for animating
+   something whose content height isn't known ahead of time — true
+   height:auto can't be transitioned by CSS, but max-height can. The
+   400px ceiling is a placeholder; real sizing gets tuned in the
+   visual design pass once actual content/typography is in place. */
+.achievements-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+
+.tile.is-expanded .achievements-list {
+  max-height: 400px;
+}
+
+.achievements-toggle {
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Expanding an Experience tile now ONLY grows its height — width
+   stays locked to the standard tile size. This is what keeps the
+   rest of the timeline visually stable instead of bumping wider.
+   The extra height is free to push the page taller because of the
+   #stage/#track changes above (no fixed height, no clipped overflow). */
+.tile.is-expanded {
+  opacity: 1; /* stays fully visible regardless of active/inactive state */
+}
+
+/* Only one tile can be expanded at a time (enforced in JS — see
+   expandTile/collapseTile). While one is open, every OTHER tile dims
+   further than the normal 0.35 inactive state, so attention stays on
+   the one the user is actually reading. */
+#track.has-expanded-tile .tile:not(.is-expanded) {
+  opacity: 0.12;
+}
+
+/* Landing and outro are full-viewport-width by design. This isn't
+   just cosmetic — it's what gives the browser genuine scrollable
+   room to actually center the very first and very last Experience
+   tiles. Without this, scrollLeft can never go low/high enough for
+   those edge tiles to reach true center, which was the root cause
+   of the active-tile detection bug. */
+.tile.tile--landing,
+.tile.tile--outro {
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+#skill-archive {
+  height: 100px;
+  border-top: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  overflow-x: auto; /* in case many skills accumulate at once */
+  transition: opacity 0.3s ease;
+  /* Without this, growing the page taller (via an expanded tile)
+     would just push this bar down the page along with everything
+     else. Sticky pins it to the viewport's bottom edge instead, so
+     it stays visible no matter how tall the page gets. */
+  position: sticky;
+  bottom: 0;
+  background: #fff; /* needed so scrolled content doesn't show through it */
+  z-index: 2;
+}
+
+#skill-archive.is-hidden {
+  opacity: 0;
+  pointer-events: none; /* prevents interacting with invisible tokens */
+}
+
+.skill-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid #999;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.skill-token.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.skill-token.is-leaving {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.skill-token .skill-level {
+  font-weight: bold;
+}
+
+/* Brief pulse whenever a skill's level increases (or decreases,
+   scrolling backward over a repeat) — same animation either way. */
+@keyframes skill-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.3); }
+  100% { box-shadow: 0 0 0 10px rgba(0, 0, 0, 0); }
+}
+
+.skill-token.just-upgraded {
+  animation: skill-pulse 0.6s ease-out;
+}
+
+/* Words linked to a Detail popup — dotted underline signals "hover
+   for more" without looking like a normal link (it isn't one). */
+.detail-anchor {
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* Spans aren't natively focusable/interactive, so unlike a real
+   <button> they have no default focus indicator at all. Since we
+   added tabindex to make these keyboard-reachable, they need an
+   explicit visible focus style or a keyboard user would have no way
+   to tell which anchor is currently focused. */
+.detail-anchor:focus {
+  outline: 2px solid #222;
+  outline-offset: 2px;
+}
+
+/* Single reusable popup, positioned via JS (see showDetailPopup).
+   pointer-events: none means the popup itself never triggers hover
+   logic, so moving the mouse over it can't cause flicker. */
+#detail-popup {
+  position: fixed;
+  max-width: 280px;
+  background: #222;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#detail-popup.is-visible {
+  opacity: 1;
+}
+
+#detail-popup h4 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+
+#detail-popup p {
+  margin: 0;
+}
+
+/* ============================================================
+   RESUME OVERLAY
+   A genuine full-screen takeover, separate from #track entirely.
+   Shown/hidden by main.js based on whether outro is the active tile.
+   ============================================================ */
+#resume-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #fff;
+  overflow-y: auto;
+  padding: 60px 24px 40px;
+}
+
+#resume-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 101;
+  padding: 8px 14px;
+  background: #fff;
+  border: 1px solid #999;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+#resume-content {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.resume-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.resume-header h1 {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.resume-title {
+  font-weight: bold;
+  margin: 4px 0;
+}
+
+.resume-contact {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.resume-section {
+  margin-bottom: 22px;
+}
+
+.resume-section h2 {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+}
+
+.resume-entry {
+  margin-bottom: 14px;
+}
+
+.resume-entry-title {
+  font-weight: bold;
+  margin: 0;
+}
+
+.resume-entry-meta {
+  font-style: italic;
+  font-size: 0.85rem;
+  color: #555;
+  margin: 2px 0 6px;
+}
+
+.resume-entry ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.resume-project {
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+}
+
+#download-resume {
+  display: block;
+  margin: 24px auto 0;
+  padding: 10px 22px;
+  cursor: pointer;
+}
+
+/* Lead capture — deliberately NOT inside #resume-content, so it never
+   appears in the printed/downloaded PDF (see @media print below). */
+#lead-capture {
+  max-width: 700px;
+  margin: 32px auto 0;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  text-align: center;
+}
+
+#lead-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+#lead-form input {
+  padding: 8px 10px;
+  font: inherit;
+  border: 1px solid #999;
+  border-radius: 6px;
+}
+
+#lead-form button {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+/* Side-by-side inputs get cramped on a phone-width screen — stack
+   them and let each take the full width instead. */
+@media (max-width: 480px) {
+  #lead-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #lead-form input,
+  #lead-form button {
+    width: 100%;
+  }
+}
+
+/* "Download PDF" is currently just the browser's native print dialog
+   (which every browser can save as a real PDF from) — a real PDF
+   library is future work, but this genuinely works today. Hiding
+   #stage entirely and forcing the overlay static means printing
+   paginates the resume normally rather than treating it as a
+   viewport-fixed layer stuck on one page. */
+@media print {
+  #stage {
+    display: none !important;
+  }
+  #resume-overlay {
+    position: static !important;
+    overflow: visible !important;
+  }
+  #resume-back,
+  #lead-capture,
+  #download-resume {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   DEBUG PANEL
+   Only ever created (see setupDebugPanel in main.js) when ?debug=true
+   is in the URL — everyone else's page never contains this element
+   at all. z-index is intentionally higher than the resume overlay's
+   (100), so it stays visible and usable even while that's open.
+   ============================================================ */
+#debug-panel {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 999;
+  width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.85);
+  color: #0f0;
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+#debug-summary {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+#debug-summary div {
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+
+#debug-log div {
+  margin-bottom: 2px;
+  opacity: 0.85;
+}
+
+/* Debugging tool only — should never appear in a printed/downloaded
+   resume even if it happened to be open when Download was clicked. */
+@media print {
+  #debug-panel {
+    display: none !important;
+  }
+}
