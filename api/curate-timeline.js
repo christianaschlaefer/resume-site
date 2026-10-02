@@ -46,9 +46,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const minCount = Math.min(3, allIds.length);
-    const maxCount = Math.max(minCount, Math.ceil(allIds.length / 2));
-
     const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -71,7 +68,13 @@ module.exports = async function handler(req, res) {
               "\n\n" +
               "If the description names a specific company and role, use web search to try to find the actual posting and understand its real requirements.\n\n" +
               `The most recent employment entry (id: "${mostRecentId}") MUST always be included, regardless of apparent relevance — recency itself is a required signal of current standing.\n\n` +
-              `Beyond that, select between ${minCount} and ${maxCount} entries total — a good curation is SELECTIVE. It is expected and desirable to exclude entries that don't meaningfully support this specific role, even if they would be impressive in a different context. Do not include an entry just because it's generally impressive; only include it if it is genuinely relevant to THIS role. List includedIds in descending order of relevance (most relevant first).\n\n` +
+              "For every OTHER entry, make an INDEPENDENT judgment call: would a hiring manager screening specifically for this role's actual requirements consider this entry a meaningful, direct piece of supporting evidence? Judge each entry on its own merits against the real job requirements — not relative to the other entries, and not against any target count.\n\n" +
+              "There is NO target number of entries to include. Let the genuine strength of the match determine the result size:\n" +
+              "- An excellent, broad match might reasonably justify including most or even all of the candidate's history.\n" +
+              "- A narrow, highly specialized role might reasonably justify including only a handful of entries.\n" +
+              "- A good curation is SELECTIVE where selectivity is warranted — it is expected and desirable to exclude entries that don't meaningfully support this specific role, even if they would be impressive in a different context.\n\n" +
+              "Points deserve this same individualized judgment, not automatic deprioritization relative to Experiences — a Point capturing a certification, side project, volunteer work, political campaign, or other notable activity can meaningfully strengthen a candidacy for some roles, and should be included whenever it genuinely does, even if it wouldn't for a more narrowly technical role.\n\n" +
+              "List includedIds in descending order of how strongly each one supports this specific candidacy.\n\n" +
               'Respond with ONLY a JSON object in this exact shape, and nothing else: {"includedIds": ["id1", "id2", ...]}'
           }
         ]
@@ -83,7 +86,7 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await anthropicResponse.json();
-    const includedIds = extractIncludedIds(data, allIds, maxCount, mostRecentId);
+    const includedIds = extractIncludedIds(data, allIds, mostRecentId);
     console.log(`curate-timeline: succeeded, included ${includedIds.length} of ${allIds.length} entries`);
     return res.status(200).json({ includedIds });
   } catch (error) {
@@ -110,7 +113,7 @@ function getSortableEndDate(entry) {
   return new Date(`${entry.dates.end}-01`).getTime();
 }
 
-function extractIncludedIds(apiResponse, allIds, maxCount, mostRecentId) {
+function extractIncludedIds(apiResponse, allIds, mostRecentId) {
   try {
     // Claude's reply may include tool-use blocks (from web search) before
     // the final text block — find the actual text content among them.
@@ -120,12 +123,11 @@ function extractIncludedIds(apiResponse, allIds, maxCount, mostRecentId) {
     // Defensive: only trust ids that actually exist in the real data, in
     // case the model hallucinates or formats something unexpectedly.
     const filtered = parsed.includedIds.filter((id) => validIds.has(id));
-    if (filtered.length === 0) return enforceMostRecent([mostRecentId], maxCount, mostRecentId);
-    // Hard backstop: enforce the ceiling in code rather than trusting the
-    // prompt alone. The model was asked to list by descending relevance,
-    // so slicing keeps its most-relevant picks and drops the rest.
-    const capped = filtered.slice(0, maxCount);
-    return enforceMostRecent(capped, maxCount, mostRecentId);
+    if (filtered.length === 0) return enforceMostRecent([mostRecentId], mostRecentId);
+    // No ceiling to enforce here anymore — the result size is whatever
+    // the model's per-entry judgment produced. The only thing still
+    // enforced in code is the one genuine hard rule: recency.
+    return enforceMostRecent(filtered, mostRecentId);
   } catch (parseError) {
     // The API call itself succeeded, but the reply wasn't in the
     // expected shape — distinct from a network/auth failure, and worth
@@ -137,10 +139,7 @@ function extractIncludedIds(apiResponse, allIds, maxCount, mostRecentId) {
 
 // Code-level guarantee that the most recent entry is present, regardless
 // of whether the model actually followed the prompt instruction above.
-// Swaps out the lowest-priority pick rather than growing past maxCount,
-// since the list is already ordered most-to-least relevant.
-function enforceMostRecent(ids, maxCount, mostRecentId) {
+function enforceMostRecent(ids, mostRecentId) {
   if (ids.includes(mostRecentId)) return ids;
-  if (ids.length < maxCount) return [mostRecentId, ...ids];
-  return [mostRecentId, ...ids.slice(0, maxCount - 1)];
+  return [mostRecentId, ...ids];
 }

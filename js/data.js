@@ -1,303 +1,220 @@
 // ============================================================
-// TIMELINE DATA
-// This is the single source of truth for the whole site.
-//
-// TEST DATASET NOTE: this career is intentionally split into two
-// clearly-differentiated tracks — early technical/software roles
-// (swe-01..05) and a later pivot into program/project management
-// (pm-01..05) — specifically so curation behavior can be verified by
-// contrast: a PM-targeted job description should surface mostly the
-// pm- entries, a SWE-targeted one mostly the swe- entries, and a
-// hybrid role (e.g. "Technical Program Manager") is a genuine edge
-// case worth watching.
+// TIMELINE DATA — Christian Schlaefer's real resume content
+// Mapped from the actual resume provided earlier in this project.
+// Several fields below are flagged with REVIEW comments — places
+// where real content had to be restructured, approximated, or
+// attributed to fit this schema, and genuinely deserve a read-through
+// before this goes live for real applications.
 // ============================================================
 
 const timeline = [
   {
-    type: "point",
-    id: "pt-01",
-    header: "Started Learning to Code",
-    date: "2008-09",
-    bodyText: "Began teaching myself the fundamentals of programming."
-  },
-  {
     type: "experience",
-    id: "swe-01",
-    employer: "TechNova Solutions",
-    jobTitle: "Junior Software Developer",
-    dates: { start: "2009-01", end: "2012-02" },
-    location: "Austin, TX",
-    overview: "Entry-level developer on a small team building internal tools and customer-facing web features.",
+    id: "sap-concur",
+    employer: "SAP Concur",
+    jobTitle: "Senior Implementation Project Manager",
+    dates: { start: "2022-01", end: "present" },
+    location: "Remote | Lakota, Iowa",
+    // REVIEW: drafted summary of your own bullets below, not new content.
+    overview: "Leads enterprise SAP Concur implementations and serves as an implementation representative on emerging AI and API-based integration capabilities.",
     achievements: [
-      "Built and shipped 8 internal tooling features used daily by the 40-person support team, reducing average ticket resolution time by 15%.",
-      "Rewrote a legacy reporting module in Python, cutting report generation time from 10 minutes to under 30 seconds."
+      "Serve as an implementation representative for emerging AI and digital-adoption capabilities, including Microsoft Copilot and an AI-assisted flat-file integration workflow using schema inference and template-independent data parsing; tested real-world use cases and provided implementation feedback supporting rollout and adoption.",
+      "Selected by Product Development to field-test emerging API-based ERP integration capabilities, evaluating real-world implementation workflows and translating customer and implementation requirements into technical and product feedback.",
+      "Developed and scaled an XML-based solution to a longstanding product data-extraction limitation, eliminating recurring 2-3 hour manual report recreation without a backend product change; presented division-wide and retained as a resource for subsequent enhancements.",
+      "Manage ~10 concurrent enterprise technology deployments (~$350K active ARR) and have delivered 90+ SAP Concur Expense and Invoice implementations for U.S. and multinational organizations, averaging 5+ core implementations and $100K–$125K implemented ARR per quarter while owning discovery, solution design, configuration, integration coordination, testing, and deployment across North America, Europe, Latin America, and Asia-Pacific.",
+      "Lead cross-functional programs across Finance, HR, IT, and operations, working with project leaders, CFOs, and executive sponsors to align technical requirements, deployment strategy, risk, testing, and adoption.",
+      "Lead the team's At Risk customer program, taking ownership of difficult and stalled engagements to diagnose failure points, establish recovery plans, restore progress, retain customers, and recover at-risk revenue.",
+      "Lead cross-functional project teams of up to 12–15 participants across implementation, technical, commercial, and customer organizations; serve as a formal mentor and technical resource for implementation professionals, with multiple SAP Spot Awards for performance and organizational impact."
     ],
+    // REVIEW: every skill below comes verbatim from your resume's Core
+    // Expertise / Technical Fluency sections, but your resume pools them
+    // at the document level rather than tying each to a specific job.
+    // I attached the full set here since SAP Concur is where they're
+    // actually demonstrated — let me know if any should also apply to
+    // your other roles.
     skills: [
-      { name: "JavaScript", tags: ["hardTechnical"] },
+      { name: "Technical Program Leadership", tags: ["expertise"] },
+      { name: "Product Requirements & Discovery", tags: ["expertise"] },
+      { name: "Enterprise AI Adoption", tags: ["expertise"] },
+      { name: "Systems Integration", tags: ["expertise"] },
+      { name: "ERP & Business Systems", tags: ["expertise"] },
+      { name: "APIs & Data Integration", tags: ["expertise"] },
+      { name: "Product Development Collaboration", tags: ["expertise"] },
+      { name: "User Adoption", tags: ["expertise"] },
+      { name: "Executive Stakeholder Leadership", tags: ["expertise"] },
+      { name: "Emerging Technology Evaluation", tags: ["expertise"] },
+      { name: "Testing & Validation", tags: ["expertise", "softTechnical"] },
+      { name: "Program Recovery", tags: ["expertise"] },
+      { name: "APIs", tags: ["hardTechnical"] },
       { name: "Python", tags: ["hardTechnical"] },
-      { name: "SQL", tags: ["hardTechnical"] }
+      { name: "CLI Workflows", tags: ["hardTechnical"] },
+      { name: "JSON", tags: ["hardTechnical"] },
+      { name: "XML", tags: ["hardTechnical"] },
+      { name: "CSV / Flat-File Integration", tags: ["hardTechnical"] },
+      { name: "Data & Schema Mapping", tags: ["hardTechnical"] },
+      { name: "SQL Familiarity", tags: ["hardTechnical"] },
+      { name: "Identity/SSO", tags: ["hardTechnical"] },
+      { name: "Multi-ERP Environments", tags: ["hardTechnical"] },
+      { name: "LLM API Integration", tags: ["hardTechnical"] },
+      { name: "Retrieval-Augmented Generation (RAG)", tags: ["hardTechnical"] },
+      { name: "Embeddings & Vector Search", tags: ["hardTechnical"] },
+      { name: "Tool Calling", tags: ["hardTechnical"] },
+      { name: "Structured Outputs", tags: ["hardTechnical"] },
+      { name: "Prompt & Context Management", tags: ["hardTechnical"] },
+      { name: "AI Evaluation & Confidence Handling", tags: ["hardTechnical"] },
+      { name: "Emergent Requirements & Rapid Problem Resolution", tags: ["softTechnical"] },
+      { name: "Multi-Stage Deployment & Operational Adoption", tags: ["softTechnical"] },
+      { name: "Integration Troubleshooting", tags: ["softTechnical"] },
+      { name: "Technical Requirements Translation", tags: ["softTechnical"] }
     ],
     resumeCategories: ["professional"],
     details: []
   },
   {
     type: "experience",
-    id: "swe-02",
-    employer: "BrightPath Software",
-    jobTitle: "Full-Stack Developer",
-    dates: { start: "2012-03", end: "2015-06" },
-    location: "Austin, TX",
-    overview: "Full-stack developer on a SaaS product serving small-business customers, owning features end-to-end from database to UI.",
+    id: "exact-sciences",
+    employer: "Exact Sciences Corporation",
+    jobTitle: "Medical Representative - Provider Engagement",
+    dates: { start: "2020-08", end: "2021-10" },
+    location: "Madison, WI | Northern New Jersey Territory",
+    overview: "Drove adoption of a reporting platform across physician practices and hospital systems in the Northern New Jersey territory.",
     achievements: [
-      "Designed and built a self-service billing dashboard adopted by the full customer base within 2 quarters, reducing billing support tickets by 35%.",
-      "Led migration of the application's data layer to PostgreSQL, improving query performance by 4x under peak load."
+      "Led rollout of Exact Sciences' reporting platform across 70+ physician practices and hospital environments, supporting hundreds of providers and presenting to audiences of 300+ personnel and healthcare-system executives; drove 20%+ quarter-over-quarter adoption growth during 2021 and routinely ranked among the strongest territories."
     ],
-    skills: [
-      { name: "Ruby on Rails", tags: ["hardTechnical"] },
-      { name: "PostgreSQL", tags: ["hardTechnical"] },
-      { name: "JavaScript", tags: ["hardTechnical"] },
-      { name: "REST APIs", tags: ["hardTechnical", "expertise"] }
-    ],
-    resumeCategories: ["professional"],
-    details: [
-      { anchorText: "improving query performance by 4x under peak load", detailId: "det-pg-migration" }
-    ]
-  },
-  {
-    type: "experience",
-    id: "pm-01",
-    employer: "Meridian Consulting Group",
-    jobTitle: "Project Coordinator",
-    dates: { start: "2015-07", end: "2017-08" },
-    location: "Dallas, TX",
-    overview: "Coordinated mid-sized client engagements for a management consulting firm, supporting project leads on scheduling, budgets, and client communications.",
-    achievements: [
-      "Coordinated logistics and status reporting across 12 concurrent client engagements, maintaining on-time reporting to engagement leads throughout.",
-      "Built a standardized project tracking template later adopted firm-wide across 6 consulting teams."
-    ],
-    skills: [
-      { name: "Stakeholder Communication", tags: ["softTechnical", "expertise"] },
-      { name: "Project Scheduling", tags: ["softTechnical"] },
-      { name: "Microsoft Excel", tags: ["hardTechnical"] }
-    ],
+    skills: [],
     resumeCategories: ["professional"],
     details: []
   },
   {
     type: "experience",
-    id: "swe-03",
-    employer: "Northfield Systems",
-    jobTitle: "Senior Software Engineer",
-    dates: { start: "2017-09", end: "2020-05" },
-    location: "Remote",
-    overview: "Senior engineer on a distributed systems team building the core transaction-processing backend for a fintech platform.",
+    id: "american-councils",
+    employer: "American Councils for International Education",
+    jobTitle: "Program Manager",
+    dates: { start: "2018-05", end: "2020-03" },
+    location: "Bucharest, Romania / Remote",
+    overview: "Managed multi-phase international programs, coordinating government, embassy, and institutional stakeholders across cross-border logistics.",
     achievements: [
-      "Architected a new event-driven transaction pipeline handling over 2 million daily transactions at 99.99% uptime.",
-      "Mentored 4 junior engineers and led the team's migration from a monolith to microservices, cutting deployment time from 45 minutes to 6."
+      "Managed multi-phase international programs serving hundreds of participants, coordinating government officials, U.S. Embassy personnel, NGOs, institutional partners, cross-border logistics, and stakeholder communications while working 4+ months on-site in Bucharest and remotely between phases."
     ],
-    skills: [
-      { name: "Java", tags: ["hardTechnical"] },
-      { name: "Kafka", tags: ["hardTechnical"] },
-      { name: "Microservices Architecture", tags: ["hardTechnical", "expertise"] },
-      { name: "System Design", tags: ["hardTechnical", "expertise"] },
-      { name: "Team Leadership", tags: ["softTechnical", "expertise"] }
+    skills: [],
+    resumeCategories: ["professional"],
+    details: []
+  },
+  {
+    type: "experience",
+    id: "jpmorgan",
+    employer: "JPMorgan Chase",
+    jobTitle: "Banker",
+    dates: { start: "2015-06", end: "2017-03" },
+    location: "Seattle, Washington",
+    overview: "Ranked among the top bankers nationally for sales performance, with a particular strength in growing first-time investor engagement.",
+    achievements: [
+      "Ranked in the 93rd percentile nationally for overall banker sales performance and developed an engagement strategy that drove 167% growth in first-time investor activity."
     ],
-    resumeCategories: ["professional", "leadership"],
-    details: [
-      { anchorText: "event-driven transaction pipeline", detailId: "det-transaction-pipeline" }
-    ]
+    skills: [],
+    resumeCategories: ["professional"],
+    details: []
+  },
+  {
+    type: "experience",
+    id: "congressional-campaign",
+    employer: "U.S. House of Representatives Campaign",
+    jobTitle: "Candidate",
+    // REVIEW: your resume only lists "2025-2026" with no months — this
+    // date range is an approximation. Please correct to the actual
+    // start/end months.
+    dates: { start: "2025-01", end: "2026-01" },
+    location: "Iowa's 4th Congressional District",
+    overview: "Directed a 36-county campaign organization, winning the Iowa Caucus straw poll for Iowa's 4th Congressional District.",
+    achievements: [
+      "Built and directed a campaign organization spanning 36 Iowa counties, recruiting county leaders and volunteers while managing contractors, vendors, field operations, public communications, procurement, and stakeholder relationships; won the Iowa Caucus straw poll for Iowa's 4th Congressional District."
+    ],
+    skills: [],
+    resumeCategories: ["internationalGovernment", "leadership"],
+    details: []
+  },
+  {
+    type: "experience",
+    id: "embassy-tokyo",
+    employer: "U.S. Embassy Tokyo",
+    jobTitle: "General Services",
+    // REVIEW: original lists this as two separate summer appointments
+    // (2013 and 2014), not one continuous role — approximated here as
+    // a single span. Consider whether you'd rather split this into two
+    // entries instead.
+    dates: { start: "2013-06", end: "2014-08" },
+    location: "Tokyo, Japan",
+    overview: "Summer appointments with extensive experience living and working independently abroad, building cross-cultural working relationships.",
+    achievements: [
+      "Extensive experience living and working independently abroad; comfortable operating in unfamiliar environments and building cross-cultural working relationships. Russian, university study."
+    ],
+    skills: [],
+    resumeCategories: ["internationalGovernment"],
+    details: []
   },
   {
     type: "point",
-    id: "pt-02",
-    header: "AWS Certified Developer",
-    date: "2020-08",
-    bodyText: "Completed AWS Certified Developer – Associate certification.",
-    details: [
-      { anchorText: "AWS Certified Developer – Associate", detailId: "det-aws-cert" }
-    ]
-  },
-  {
-    type: "experience",
-    id: "swe-04",
-    employer: "CloudAxis Technologies",
-    jobTitle: "DevOps Engineer",
-    dates: { start: "2020-06", end: "2021-08" },
-    location: "Remote",
-    overview: "Owned CI/CD and cloud infrastructure for a 25-engineer product organization migrating to Kubernetes.",
-    achievements: [
-      "Led migration of all production services to Kubernetes on AWS, reducing infrastructure costs by 28% and deployment failures by 60%.",
-      "Built a fully automated CI/CD pipeline that cut average deploy time from 2 hours to 12 minutes."
-    ],
-    skills: [
-      { name: "Kubernetes", tags: ["hardTechnical"] },
-      { name: "AWS", tags: ["hardTechnical", "expertise"] },
-      { name: "CI/CD", tags: ["hardTechnical"] },
-      { name: "Terraform", tags: ["hardTechnical"] }
-    ],
-    resumeCategories: ["professional"],
-    details: []
-  },
-  {
-    type: "experience",
-    id: "swe-05",
-    employer: "Orbit Mobile Labs",
-    jobTitle: "Mobile Developer",
-    dates: { start: "2021-09", end: "2022-06" },
-    location: "Remote",
-    overview: "iOS and Android developer on a consumer fitness app with over 500,000 active users.",
-    achievements: [
-      "Rebuilt the app's onboarding flow in Swift and Kotlin, increasing trial-to-paid conversion by 22%.",
-      "Reduced app crash rate from 2.1% to 0.3% by rewriting the core data-sync layer."
-    ],
-    skills: [
-      { name: "Swift", tags: ["hardTechnical"] },
-      { name: "Kotlin", tags: ["hardTechnical"] },
-      { name: "Mobile Architecture", tags: ["hardTechnical", "expertise"] }
-    ],
-    resumeCategories: ["professional"],
-    details: []
-  },
-  {
-    type: "experience",
-    id: "pm-02",
-    employer: "Harborview Health Systems",
-    jobTitle: "Product Operations Manager",
-    dates: { start: "2022-07", end: "2023-08" },
-    location: "Chicago, IL",
-    overview: "Managed cross-functional product operations for a healthcare technology company, bridging engineering, clinical, and compliance teams.",
-    achievements: [
-      "Standardized the product launch process across 5 product lines, reducing average time-to-launch by 3 weeks.",
-      "Managed a $1.2M vendor and tooling budget, consolidating 9 overlapping tools down to 3."
-    ],
-    skills: [
-      { name: "Process Improvement", tags: ["softTechnical", "expertise"] },
-      { name: "Vendor Management", tags: ["softTechnical"] },
-      { name: "Cross-Functional Leadership", tags: ["softTechnical", "expertise"] }
-    ],
-    resumeCategories: ["professional"],
-    details: []
-  },
-  {
-    type: "experience",
-    id: "pm-03",
-    employer: "Vantage Industrial Group",
-    jobTitle: "PMO Lead / Business Operations Manager",
-    dates: { start: "2023-09", end: "2024-09" },
-    location: "Chicago, IL",
-    overview: "Led the project management office for a 150-person industrial manufacturing division, overseeing portfolio governance and executive reporting.",
-    achievements: [
-      "Established the division's first formal PMO, bringing structured governance to a $40M portfolio of over 20 active projects.",
-      "Reduced project overrun rate from 35% to 12% within the first year through standardized risk-review checkpoints."
-    ],
-    skills: [
-      { name: "Portfolio Management", tags: ["softTechnical", "expertise"] },
-      { name: "Risk Management", tags: ["softTechnical", "expertise"] },
-      { name: "Executive Reporting", tags: ["softTechnical"] }
-    ],
-    resumeCategories: ["professional", "leadership"],
-    details: [
-      { anchorText: "$40M portfolio of over 20 active projects", detailId: "det-pmo" }
-    ]
-  },
-  {
-    type: "experience",
-    id: "pm-04",
-    employer: "Granite Advisory Partners",
-    jobTitle: "Change Management Consultant",
-    dates: { start: "2024-10", end: "2025-06" },
-    location: "Remote",
-    overview: "Led organizational change management for enterprise clients undergoing large-scale system and process transformations.",
-    achievements: [
-      "Designed and delivered a change-adoption program for a 3,000-employee ERP rollout, achieving 91% user adoption within 90 days.",
-      "Trained 40 internal change champions across 6 business units to sustain adoption after consultant handoff."
-    ],
-    skills: [
-      { name: "Change Management", tags: ["softTechnical", "expertise"] },
-      { name: "Training & Enablement", tags: ["softTechnical"] },
-      { name: "Stakeholder Communication", tags: ["softTechnical", "expertise"] }
-    ],
-    resumeCategories: ["professional"],
-    details: []
-  },
-  {
-    type: "experience",
-    id: "pm-05",
-    employer: "Meridian Health Network",
-    jobTitle: "Senior Program Manager",
-    dates: { start: "2025-07", end: "present" },
-    location: "Chicago, IL",
-    overview: "Senior program manager overseeing a portfolio of strategic initiatives for a regional healthcare network.",
-    achievements: [
-      "Lead a portfolio of 8 strategic initiatives totaling $15M in annual investment, reporting directly to the VP of Operations.",
-      "Built the organization's first cross-departmental program governance model, now used across 4 divisions."
-    ],
-    skills: [
-      { name: "Program Management", tags: ["softTechnical", "expertise"] },
-      { name: "Executive Stakeholder Management", tags: ["softTechnical", "expertise"] },
-      { name: "Strategic Planning", tags: ["softTechnical", "expertise"] }
-    ],
-    resumeCategories: ["professional", "leadership"],
-    details: []
+    id: "pt-ai-project",
+    header: "Independent AI Project: ERP Integration Mapping Assistant",
+    // REVIEW: no date was given in the original resume for this
+    // project — placeholder, please correct.
+    date: "2026-01",
+    bodyText: "Built a local LLM-assisted prototype that compares ERP source schemas with target integration templates, retrieves relevant technical documentation, and generates source-grounded field-mapping recommendations with confidence flags and supporting rationale."
   }
 ];
 
-// Detail popups, referenced by id from anywhere in the timeline above.
-const details = {
-  "det-pg-migration": {
-    header: "PostgreSQL Migration",
-    bodyText: "Moved the application's data layer off its original database to PostgreSQL, redesigning indexes and query patterns along the way to unlock the performance gain."
+// Kept entirely SEPARATE from `timeline` on purpose — education entries
+// are never sent to curate-timeline.js and never go through LLM
+// judgment at all. They're merged into the render queue unconditionally
+// in main.js (appendCuratedTimeline), the same way landing/outro are.
+const education = [
+  {
+    type: "education",
+    id: "edu-stolaf",
+    degree: "Bachelor of Arts, Political Science",
+    institution: "St. Olaf College",
+    location: "Northfield, Minnesota",
+    year: "2020"
   },
-  "det-transaction-pipeline": {
-    header: "Event-Driven Transaction Pipeline",
-    bodyText: "Replaced a synchronous, tightly-coupled transaction flow with an event-driven architecture using a message broker, allowing each stage to scale and fail independently."
-  },
-  "det-aws-cert": {
-    header: "AWS Certification Scope",
-    bodyText: "Covered deploying, managing, and debugging applications on AWS, including Lambda, DynamoDB, and API Gateway."
-  },
-  "det-pmo": {
-    header: "Portfolio Governance Scope",
-    bodyText: "Oversaw intake, prioritization, and health reporting for the division's full active project portfolio, standardizing status definitions across previously siloed teams."
+  {
+    type: "education",
+    id: "edu-clark",
+    degree: "Associate of Arts, Business Administration",
+    institution: "Clark College",
+    location: "Vancouver, Washington",
+    year: "2017"
   }
-};
+];
+
+// No Detail popups defined yet — add entries here, referenced from
+// the `details` array on any timeline entry above, the same way the
+// test dataset did.
+const details = {};
 
 // ============================================================
-// PROFILE & EDUCATION
-// Fully static, "hard coded" per the resume template — entirely
-// separate from the curated Experience/Point system.
+// PROFILE
 // ============================================================
 
 const profile = {
-  name: "Your Name",
-  title: "Technical Program & Engineering Leader",
-  location: "Chicago, IL",
-  travelAvailability: "Remote",
-  phone: "555-123-4567",
-  email: "you@example.com",
+  name: "Christian Schlaefer",
+  title: "Technical Program & International Operations Leader",
+  location: "Lakota, Iowa",
+  travelAvailability: "Remote | Available for CONUS / OCONUS Travel",
+  phone: "802-363-2433",
+  email: "christian.a.schlaefer@gmail.com",
   executiveProfileDefault:
-    "Leader with a dual background in hands-on software engineering and " +
-    "technical program management. Experienced architecting and shipping " +
-    "production systems as well as leading cross-functional programs, " +
-    "portfolio governance, and organizational change initiatives. " +
-    "Comfortable operating as deeply in the technical details as in the " +
-    "boardroom."
+    "Technical program and enterprise technology leader with 10+ years of experience delivering complex " +
+    "technology programs, driving product adoption, and translating business and user requirements into " +
+    "scalable technical solutions. At SAP Concur, has led 90+ enterprise deployments spanning ERP/API " +
+    "integrations, multinational implementations, and emerging technology initiatives. Experience includes " +
+    "direct collaboration with Product Development on new API-based integration capabilities, AI-assisted " +
+    "data-integration workflows, solution innovation, executive stakeholder leadership, and recovery of " +
+    "complex programs. Known for operating effectively in ambiguity, identifying product and process " +
+    "limitations, and developing practical solutions that improve adoption and execution."
 };
 
-const education = [
-  {
-    degree: "Bachelor of Science, Computer Science",
-    institution: "Example University",
-    location: "Chicago, IL",
-    year: "2008"
-  }
-];
-
 // ============================================================
-// RESUME SELECTION (placeholder for future LLM curation output)
-// Emergency fallback only — used if a resume is ever compiled with no
-// curation result at all AND the API call also fails. Includes
-// everything, since "show it all" is the safest possible default.
+// RESUME SELECTION (emergency fallback only — see main.js)
 // ============================================================
 
 const secondaryHeadingLabels = {

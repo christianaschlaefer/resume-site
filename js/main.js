@@ -64,8 +64,22 @@ function createTileElement(entry, index) {
     case "point":
       tile.innerHTML = renderPointTile(entry);
       break;
+    case "education":
+      tile.innerHTML = renderEducationTile(entry);
+      break;
   }
   return tile;
+}
+
+function renderEducationTile(entry) {
+  return `
+    <h2>${entry.degree}</h2>
+    <p class="dates">${entry.year}</p>
+    <p class="body-text">${entry.institution} — ${entry.location}</p>
+  `;
+  // Unlike Experience/Point, education entries never go through
+  // curation at all (see appendCuratedTimeline) — they're always
+  // unconditionally present, the same way landing/outro are.
 }
 
 function renderLandingOnly(track) {
@@ -75,14 +89,30 @@ function renderLandingOnly(track) {
   tileElements.push(tile);
 }
 
+// A single comparable date string regardless of entry type, so
+// Experience, Point, and Education entries can all be sorted into one
+// chronological sequence together.
+function getEntrySortKey(entry) {
+  if (entry.type === "experience") return entry.dates.start;
+  if (entry.type === "point") return entry.date;
+  if (entry.type === "education") return `${entry.year}-01`;
+  return "";
+}
+
 // Appends the curated subset + outro AFTER the already-in-place
-// landing tile. renderQueue/tileElements just grow — every other
-// system (scroll tracking, skill archive, resume compiler) reads
-// these by index generically and needs no changes at all to handle
-// tiles arriving in a second batch instead of all at once.
+// landing tile. Education is merged in UNCONDITIONALLY here, never
+// sent to curate-timeline at all — a degree isn't a judgment call, so
+// it bypasses the LLM's decision process entirely rather than being
+// imposed as a rule the model has to follow. renderQueue/tileElements
+// just grow — every other system (scroll tracking, skill archive,
+// resume compiler) reads these by index generically and needs no
+// changes at all to handle tiles arriving in a second batch.
 function appendCuratedTimeline(track, curation) {
   const curatedEntries = timeline.filter((e) => curation.includedIds.includes(e.id));
-  const newEntries = [...curatedEntries, { type: "outro" }];
+  const merged = [...curatedEntries, ...education].sort(
+    (a, b) => getEntrySortKey(a).localeCompare(getEntrySortKey(b))
+  );
+  const newEntries = [...merged, { type: "outro" }];
 
   newEntries.forEach((entry) => {
     const index = renderQueue.length;
