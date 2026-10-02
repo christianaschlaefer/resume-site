@@ -55,7 +55,11 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1024,
+        // Generous on purpose — max_tokens is a ceiling, not a target,
+        // so this costs nothing extra unless actually needed. Anthropic's
+        // own docs use 16000 for comparable calls; this covers both the
+        // web search tool overhead AND the final answer with real margin.
+        max_tokens: 8192,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
@@ -118,6 +122,14 @@ function extractIncludedIds(apiResponse, allIds, mostRecentId) {
     // Claude's reply may include tool-use blocks (from web search) before
     // the final text block — find the actual text content among them.
     const textBlock = apiResponse.content.find((block) => block.type === "text");
+    if (!textBlock) {
+      // No text block at all usually means the response got cut off by
+      // max_tokens before reaching visible output (e.g. mid-reasoning or
+      // mid-tool-use) — logging stop_reason and the block types present
+      // makes that diagnosable from the logs instead of a bare crash.
+      const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
+      throw new Error(`No text block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
+    }
     const parsed = JSON.parse(textBlock.text);
     const validIds = new Set(allIds);
     // Defensive: only trust ids that actually exist in the real data, in

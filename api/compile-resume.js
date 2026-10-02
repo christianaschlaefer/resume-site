@@ -51,7 +51,11 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 2048,
+        // Matches the figure in Anthropic's own current docs examples for
+        // comparable calls — max_tokens is a ceiling, not a target, so
+        // this costs nothing extra unless the output genuinely needs it,
+        // which a real multi-experience resume with no bullet cap can.
+        max_tokens: 16000,
         messages: [{ role: "user", content: promptContent }]
       })
     });
@@ -137,6 +141,14 @@ function getSortableEndDate(entry) {
 function extractSelection(apiResponse, curatedEntries, mostRecentId) {
   try {
     const textBlock = apiResponse.content.find((block) => block.type === "text");
+    if (!textBlock) {
+      // No text block at all usually means the response got cut off by
+      // max_tokens before reaching visible output (e.g. mid-reasoning or
+      // mid-tool-use) — logging stop_reason and the block types present
+      // makes that diagnosable from the logs instead of a bare crash.
+      const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
+      throw new Error(`No text block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
+    }
     const parsed = JSON.parse(textBlock.text);
     if (!Array.isArray(parsed.experiences)) throw new Error("Malformed response");
     return enforceMostRecent(parsed, curatedEntries, mostRecentId);
