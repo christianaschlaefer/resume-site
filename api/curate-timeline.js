@@ -79,7 +79,7 @@ module.exports = async function handler(req, res) {
               "- A good curation is SELECTIVE where selectivity is warranted — it is expected and desirable to exclude entries that don't meaningfully support this specific role, even if they would be impressive in a different context.\n\n" +
               "Points deserve this same individualized judgment, not automatic deprioritization relative to Experiences — a Point capturing a certification, side project, volunteer work, political campaign, or other notable activity can meaningfully strengthen a candidacy for some roles, and should be included whenever it genuinely does, even if it wouldn't for a more narrowly technical role.\n\n" +
               "List includedIds in descending order of how strongly each one supports this specific candidacy.\n\n" +
-              'Respond with ONLY a JSON object in this exact shape, and nothing else: {"includedIds": ["id1", "id2", ...]}'
+              'Your entire response must be nothing but the raw JSON object — no explanation, no preamble, no markdown code fences. Begin your response with { and end with }, in this exact shape: {"includedIds": ["id1", "id2", ...]}'
           }
         ]
       })
@@ -130,7 +130,7 @@ function extractIncludedIds(apiResponse, allIds, mostRecentId) {
       const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
       throw new Error(`No text block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
     }
-    const parsed = JSON.parse(textBlock.text);
+    const parsed = extractJsonObject(textBlock.text);
     const validIds = new Set(allIds);
     // Defensive: only trust ids that actually exist in the real data, in
     // case the model hallucinates or formats something unexpectedly.
@@ -143,8 +143,15 @@ function extractIncludedIds(apiResponse, allIds, mostRecentId) {
   } catch (parseError) {
     // The API call itself succeeded, but the reply wasn't in the
     // expected shape — distinct from a network/auth failure, and worth
-    // telling apart in the logs since the fix is different.
-    console.error("curate-timeline: failed to parse Claude's response:", parseError);
+    // telling apart in the logs since the fix is different. Logging the
+    // actual raw text (not just the exception) means a failure like
+    // unexpected leading prose is visible in the logs immediately,
+    // rather than needing to reverse-engineer it from a bare error.
+    const rawSnippet = (apiResponse.content || [])
+      .map((b) => b.text || "")
+      .join("")
+      .slice(0, 300);
+    console.error("curate-timeline: failed to parse Claude's response:", parseError.message, "| raw response:", rawSnippet);
     return allIds;
   }
 }
@@ -154,4 +161,23 @@ function extractIncludedIds(apiResponse, allIds, mostRecentId) {
 function enforceMostRecent(ids, mostRecentId) {
   if (ids.includes(mostRecentId)) return ids;
   return [mostRecentId, ...ids];
+}
+
+// Models sometimes preface structured output with a bit of explanatory
+// prose ("Based on the job description...") even when explicitly told
+// to respond with ONLY JSON. Rather than relying on the instruction
+// alone, this scans for the first balanced {...} object anywhere in the
+// text, so leading or trailing commentary doesn't break parsing.
+function extractJsonObject(text) {
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("No JSON object found in response text");
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error("Unbalanced JSON object in response text");
 }

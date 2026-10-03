@@ -3,15 +3,44 @@
 // Body (revision): { ...initial, revision: { previousSelection, estimatedPages } }
 // Returns: { experiences: [{ id, section, bullets }], points: [...] }
 //
-// Works ONLY on the already-curated subset from Phase 1 — this never
-// reconsiders entries that curate-timeline already excluded.
-//
-// Page-fit is handled by the CLIENT calling this endpoint again in
-// "revision" mode when the rendered result measures too long — see
-// fitResumeToTwoPages in main.js. Deliberately NOT a mechanical trim:
-// deciding what to cut or tighten to fit is an editorial judgment call
-// (which content most helps THIS resume), not something a script can
-// safely do by a rule like "whichever entry has the most bullets."
+// Uses FORCED TOOL USE for structured output — the model cannot respond
+// with free text, only a validated call to compile_resume_selection.
+// This is the field's documented, intended way to get reliable
+// structured output from Claude, and it eliminates the "preamble before
+// JSON" / "malformed JSON" failure modes entirely, rather than parsing
+// defensively around them after the fact.
+
+const COMPILE_RESUME_TOOL = {
+  name: "compile_resume_selection",
+  description: "Records the final selection of experiences, their resume section, and their bullet text for a tailored resume.",
+  input_schema: {
+    type: "object",
+    properties: {
+      experiences: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "The experience's id, exactly as given in the source data." },
+            section: { type: "string", description: "Resume section: \"professional\", or one of this entry's other resumeCategories values for a secondary heading." },
+            bullets: {
+              type: "array",
+              items: { type: "string" },
+              description: "Bullet text, most relevant first. Verbatim, combined, or lightly rewritten from the source achievements only — never a fact, number, or skill not already present there."
+            }
+          },
+          required: ["id", "section", "bullets"]
+        }
+      },
+      points: {
+        type: "array",
+        items: { type: "string" },
+        description: "IDs of Point entries worth featuring as notable projects."
+      }
+    },
+    required: ["experiences", "points"]
+  }
+};
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -51,11 +80,9 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        // Matches the figure in Anthropic's own current docs examples for
-        // comparable calls — max_tokens is a ceiling, not a target, so
-        // this costs nothing extra unless the output genuinely needs it,
-        // which a real multi-experience resume with no bullet cap can.
         max_tokens: 16000,
+        tools: [COMPILE_RESUME_TOOL],
+        tool_choice: { type: "tool", name: "compile_resume_selection" },
         messages: [{ role: "user", content: promptContent }]
       })
     });
@@ -95,8 +122,7 @@ function buildInitialPrompt(jobDescription, curatedEntries, mostRecentId) {
     '- Decide which ONE secondary heading (if any) best fits this job, drawn from whichever categories appear in these entries\' resumeCategories besides "professional" (e.g. "leadership", "internationalGovernment", "selected"). Use at most one secondary heading across the whole resume, and never place the same entry in two sections.\n' +
     "- Bullets may be copied verbatim, combined, OR REWRITTEN to emphasize what's most relevant to THIS specific role — rephrasing for emphasis is encouraged. The one hard limit: never introduce a fact, number, or skill that isn't already present somewhere in that entry's own achievements/overview.\n" +
     "- Within each entry, list bullets in descending order of relevance to this role — most relevant first.\n" +
-    "- Select which, if any, Point entries are worth featuring as notable projects.\n\n" +
-    'Respond with ONLY a JSON object in this exact shape, nothing else: {"experiences": [{"id": "...", "section": "...", "bullets": ["...", "..."]}], "points": ["..."]}'
+    "- Select which, if any, Point entries are worth featuring as notable projects."
   );
 }
 
@@ -118,8 +144,7 @@ function buildRevisionPrompt(jobDescription, curatedEntries, revision, mostRecen
     "Hard constraints that still apply:\n" +
     `- The most recent employment entry (id: "${mostRecentId}") must remain, with at least one bullet.\n` +
     "- Every other included entry must also keep at least one bullet.\n" +
-    "- Never introduce a fact, number, or skill not already present in the original source entries.\n\n" +
-    'Respond with ONLY a JSON object in this exact shape, nothing else: {"experiences": [{"id": "...", "section": "...", "bullets": ["...", "..."]}], "points": ["..."]}'
+    "- Never introduce a fact, number, or skill not already present in the original source entries."
   );
 }
 
@@ -139,23 +164,21 @@ function getSortableEndDate(entry) {
 }
 
 function extractSelection(apiResponse, curatedEntries, mostRecentId) {
-  try {
-    const textBlock = apiResponse.content.find((block) => block.type === "text");
-    if (!textBlock) {
-      // No text block at all usually means the response got cut off by
-      // max_tokens before reaching visible output (e.g. mid-reasoning or
-      // mid-tool-use) — logging stop_reason and the block types present
-      // makes that diagnosable from the logs instead of a bare crash.
-      const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
-      throw new Error(`No text block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
-    }
-    const parsed = JSON.parse(textBlock.text);
-    if (!Array.isArray(parsed.experiences)) throw new Error("Malformed response");
-    return enforceMostRecent(parsed, curatedEntries, mostRecentId);
-  } catch (parseError) {
-    console.error("compile-resume: failed to parse Claude's response, using mechanical fallback:", parseError);
+  // Forced tool use means the structured data arrives already-parsed in
+  // the tool_use block's `input` field — no text block, no JSON.parse,
+  // and therefore no "preamble before the JSON" failure mode at all.
+  const toolUseBlock = apiResponse.content.find((block) => block.type === "tool_use");
+  if (!toolUseBlock) {
+    const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
+    console.error(`compile-resume: no tool_use block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
     return mechanicalFallback(curatedEntries);
   }
+  const parsed = toolUseBlock.input;
+  if (!Array.isArray(parsed.experiences)) {
+    console.error("compile-resume: tool_use input missing experiences array:", JSON.stringify(parsed).slice(0, 300));
+    return mechanicalFallback(curatedEntries);
+  }
+  return enforceMostRecent(parsed, curatedEntries, mostRecentId);
 }
 
 // Code-level guarantee that the most recent entry is present with at

@@ -803,21 +803,23 @@ function estimatePageCount(html) {
 // slightly over after that, the overflow is accepted as-is: a resume
 // that runs a few lines onto page 3 is a far safer outcome than one
 // where a script deleted something that might have mattered.
-async function fitResumeToTwoPages(selection, curatedEntries) {
+//
+// Returns the finalized SELECTION, not rendered HTML — the header
+// (title + Executive Profile) still needs to be written against this
+// FINISHED body afterward, in compileResume() below.
+async function fitSelectionToTwoPages(selection, curatedEntries) {
   let current = selection;
-  let html = renderResume(buildResumeData(current));
-  let pages = estimatePageCount(html);
+  let pages = estimatePageCount(renderResume(buildResumeData(current)));
 
   const maxRevisions = 2;
   for (let attempt = 0; attempt < maxRevisions && pages > 2; attempt++) {
     const revised = await requestResumeRevision(curatedEntries, current, pages);
     if (!revised) break; // revision call itself failed — stop rather than loop on nothing
     current = revised;
-    html = renderResume(buildResumeData(current));
-    pages = estimatePageCount(html);
+    pages = estimatePageCount(renderResume(buildResumeData(current)));
   }
 
-  return html;
+  return current;
 }
 
 async function requestResumeRevision(curatedEntries, previousSelection, estimatedPages) {
@@ -864,10 +866,61 @@ async function compileResume() {
     selection = lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
   }
 
-  // Measuring and, if needed, revising for length happens here — after
-  // compilation succeeds or falls back, but before anything is rendered
-  // to the page, so the caller always receives final, fit-checked HTML.
-  return fitResumeToTwoPages(selection, curatedEntries);
+  // Order matters here: bullets/sections must be completely FINAL before
+  // writing a title/summary that describes them — otherwise the header
+  // could end up describing content that got trimmed away afterward.
+  selection = await fitSelectionToTwoPages(selection, curatedEntries);
+
+  const data = buildResumeData(selection);
+  const header = await finalizeResumeHeader(data);
+  data.profile = { ...data.profile, title: header.title };
+  data.executiveProfile = header.executiveProfile;
+
+  return renderResume(data);
+}
+
+// Runs ONLY after the body is fully finalized (selection + length-fit
+// both done), and is handed ONLY that finished body — never the full
+// career history. That's what makes "grounded in what's actually on
+// the resume" a structural guarantee rather than just an instruction:
+// the excluded material is literally absent from this call's context.
+async function finalizeResumeHeader(data) {
+  const fallback = { title: data.profile.title, executiveProfile: data.executiveProfile };
+
+  const finalizedBody = {
+    professional: data.professional.map(({ entry, bulletTexts }) => ({
+      employer: entry.employer,
+      jobTitle: entry.jobTitle,
+      bulletTexts
+    })),
+    secondary: {
+      label: data.secondary.label,
+      entries: data.secondary.entries.map(({ entry, bulletTexts }) => ({
+        employer: entry.employer,
+        jobTitle: entry.jobTitle,
+        bulletTexts
+      }))
+    },
+    skillBuckets: data.skillBuckets,
+    featuredPoints: data.featuredPoints.map((p) => ({ header: p.header, bodyText: p.bodyText })),
+    defaultTitle: data.profile.title,
+    defaultExecutiveProfile: data.executiveProfile
+  };
+
+  try {
+    const response = await fetch("/api/finalize-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobDescription: lastJobDescription, finalizedBody })
+    });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    const result = await response.json();
+    document.dispatchEvent(new CustomEvent("resume:headerFinalized", { detail: result }));
+    return result;
+  } catch (error) {
+    console.error("Resume header finalization failed, using defaults:", error);
+    return fallback;
+  }
 }
 
 // ============================================================
@@ -1201,6 +1254,9 @@ function setupDebugPanel() {
   });
   document.addEventListener("resume:downloadclicked", () => {
     logEntry("Download PDF clicked");
+  });
+  document.addEventListener("resume:headerFinalized", (e) => {
+    logEntry(`Header finalized: "${e.detail.title}"`);
   });
 
   document.addEventListener("intake:submitted", (e) => {
