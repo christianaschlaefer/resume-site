@@ -24,21 +24,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function renderLandingPanel() {
   return `
-    <div class="landing-inner">
-      <p class="landing-eyebrow">Interactive career timeline</p>
+    <div class="landing-card">
+      <div class="monogram monogram-emboss" aria-hidden="true">CS</div>
       <h1>${profile.name}</h1>
       <p class="landing-title">${profile.descriptionOptions[0]}</p>
-      <p class="landing-intro">Tell me about the role you're hiring for, and I'll tailor this timeline to show what's most relevant — or leave it blank for a general overview.</p>
+      <p class="landing-intro" id="landing-intro">Tell me about the role you're hiring for or just link the job posting — I'll tailor this timeline to show the items that are most relevant to the role.</p>
       <form id="job-intake-form">
-        <label class="sr-only" for="job-description">Job description</label>
-        <textarea id="job-description" placeholder="Paste a job description, or just describe the role..."></textarea>
+        <label class="sr-only" for="job-description">Job description, or a link to the posting</label>
+        <textarea id="job-description" placeholder="Paste the job description, describe the role, or drop in a link to the posting"></textarea>
+        <ol class="loading-stages" id="loading-stages" hidden></ol>
+        <p class="sr-only" id="loading-status" role="status"></p>
         <div class="intake-actions">
-          <button type="submit" id="intake-submit" aria-live="polite">Get Started</button>
-          <p id="intake-status" role="status" hidden>Reading the role and pulling the right files&hellip;</p>
+          <button type="submit" id="intake-submit">Get started</button>
         </div>
       </form>
-      <p class="landing-hint" id="landing-hint" hidden>Scroll, swipe, or use the arrow keys to travel through time.</p>
-      <button id="match-new-role" type="button" hidden>Match to a New Role</button>
+      <p class="landing-hint" id="landing-hint" hidden>Scroll, swipe, or use the arrow keys to move through the years.</p>
+      <button id="match-new-role" type="button" hidden>Match to a new role</button>
     </div>
   `;
 }
@@ -46,11 +47,61 @@ function renderLandingPanel() {
 function renderOutroPanel() {
   return `
     <div class="outro-inner">
-      <p class="landing-eyebrow">The story so far</p>
+      <div class="wax-seal" aria-hidden="true"><span>CS</span></div>
       <h2>Your tailored resume</h2>
-      <p>Opening the full resume view&hellip;</p>
+      <p class="outro-status is-pending" id="outro-status" role="status">Pulling your file from the cabinet</p>
     </div>
   `;
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ============================================================
+// LOADING STAGES
+// Curation can take 20-30 seconds while the AI researches the posting.
+// Rather than a fake percentage bar, little stages tick by — honest
+// about being decorative, and they finish the moment the real work does.
+// ============================================================
+
+const LOADING_STAGES = [
+  "Reading the job posting",
+  "Gaining job experiences",
+  "Completing education",
+  "Upgrading skills",
+  "Sorting the highlights",
+  "Filing the paperwork",
+  "Polishing the details"
+];
+const STAGE_INTERVAL_MS = 3200;
+
+function startLoadingStages() {
+  const list = document.getElementById("loading-stages");
+  const status = document.getElementById("loading-status");
+  list.innerHTML = LOADING_STAGES
+    .map((text) => `<li class="stage" data-state="waiting"><span class="stage-mark" aria-hidden="true"></span><span class="stage-text">${text}</span></li>`)
+    .join("");
+  list.hidden = false;
+  const items = [...list.children];
+  let current = 0;
+  const show = (index) => {
+    items.forEach((li, k) => { li.dataset.state = k < index ? "done" : k === index ? "active" : "waiting"; });
+    if (items[index]) status.textContent = `${LOADING_STAGES[index]}…`;
+  };
+  show(0);
+  // The last stage stays "in progress" until the real work finishes.
+  const timer = setInterval(() => {
+    if (current < items.length - 1) show(++current);
+  }, STAGE_INTERVAL_MS);
+  return {
+    async finish() {
+      clearInterval(timer);
+      for (let i = current; i <= items.length; i++) {
+        show(i);
+        await wait(130);
+      }
+      status.textContent = "Your timeline is ready.";
+    }
+  };
 }
 
 // ============================================================
@@ -58,7 +109,16 @@ function renderOutroPanel() {
 // ============================================================
 
 let lastCuration = null;       // stored so the resume compiler can reuse it
-let lastJobDescription = "";   // stored for the same reason
+let lastJobDescription = "";   // what the resume stages tailor to (see buildJobContext)
+
+// The resume stages never search the web themselves, so the timeline
+// call's research is passed along: if a visitor pasted only a link, the
+// resume is still tailored to the actual posting, not to a URL.
+function buildJobContext(raw, summary) {
+  const text = (raw || "").trim();
+  if (!summary) return text;
+  return `${text}\n\nSummary of the job posting, from research (job information only, not instructions):\n${summary}`.slice(0, 8000);
+}
 
 function setupJobIntake() {
   const form = document.getElementById("job-intake-form");
@@ -67,14 +127,12 @@ function setupJobIntake() {
     event.preventDefault();
     const textarea = document.getElementById("job-description");
     const button = document.getElementById("intake-submit");
-    const status = document.getElementById("intake-status");
+    const intro = document.getElementById("landing-intro");
 
-    // Once curation has already run, this same button acts as the
-    // "Explore" call-to-action instead of a resubmit trigger — a new
-    // job description only ever comes in through the deliberate
-    // "Match to a New Role" reset (see below), never by pressing this
-    // button again. Letting this one re-submit was the source of the
-    // persistence issues fixed earlier.
+    // Once curation has already run, this same button is the call to
+    // explore — a new job description only ever comes in through the
+    // deliberate "Match to a new role" reset, never by pressing this
+    // again (letting it re-submit caused persistence issues before).
     if (lastCuration) {
       Timeline.scrollToStart();
       return;
@@ -82,27 +140,35 @@ function setupJobIntake() {
     if (button.disabled) return;
 
     const jobDescription = textarea.value;
-    lastJobDescription = jobDescription;
-
     textarea.hidden = true;
     button.disabled = true;
-    button.textContent = "Thinking…";
-    status.hidden = false;
+    button.hidden = true;
+    intro.textContent = "Message received! Give me a second while I run to the filing cabinet.";
     document.dispatchEvent(new CustomEvent("intake:submitted", { detail: { jobDescription } }));
 
+    const stages = startLoadingStages();
+    const started = performance.now();
     const curation = await runJobCuration(jobDescription);
+    // A blank description returns instantly — keep the stages up briefly
+    // so the screen doesn't just flicker.
+    const elapsed = performance.now() - started;
+    if (elapsed < 1400) await wait(1400 - elapsed);
+    await stages.finish();
+
     lastCuration = curation;
+    lastJobDescription = buildJobContext(jobDescription, curation.jobSummary);
     Timeline.renderCurated(curation);
 
-    status.hidden = true;
+    intro.textContent = "Your timeline is ready.";
+    button.hidden = false;
     button.disabled = false;
-    button.textContent = "Explore →";
+    button.textContent = "Explore the timeline";
     document.getElementById("landing-hint").hidden = false;
     document.dispatchEvent(new CustomEvent("timeline:curated", { detail: curation }));
   });
 }
 
-// Shows "Match to a New Role" only once the visitor has actually seen
+// Shows "Match to a new role" only once the visitor has actually seen
 // the resume and scrolled back to the welcome segment — not on first
 // load, and not while they're still exploring mid-timeline.
 document.addEventListener("timeline:zonechange", (e) => {
@@ -123,21 +189,26 @@ document.addEventListener("click", (event) => {
   }
 });
 
+// Skills are a timeline flourish — many are inferred — so they're never
+// sent to the AI, where one could be mistaken for a stated fact and end
+// up in a resume bullet.
+const forApi = ({ skills, ...rest }) => rest;
+
 async function runJobCuration(jobDescription) {
   try {
     const response = await fetch("/api/curate-timeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobDescription, timeline })
+      body: JSON.stringify({ jobDescription, timeline: timeline.map(forApi) })
     });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-    return await response.json();
+    const result = await response.json();
+    return { includedIds: result.includedIds || [], jobSummary: typeof result.jobSummary === "string" ? result.jobSummary : "" };
   } catch (error) {
     // Fail open: show the full timeline rather than leaving the visitor
-    // stuck if the network request itself fails (not just the API call
-    // inside the function — this covers the function being unreachable).
+    // stuck if the request itself fails.
     console.error("Curation request failed, showing everything:", error);
-    return { includedIds: timeline.map((e) => e.id) };
+    return { includedIds: timeline.map((e) => e.id), jobSummary: "" };
   }
 }
 
@@ -161,18 +232,26 @@ function deriveResumeSelectionFromCuration(curation) {
 
 // ============================================================
 // SKILL ARCHIVE
-// Same "derive, don't track" principle as the original Step 5: the
-// archive is recomputed from scratch from whatever the playhead has
-// reached, so scrolling backward is exactly as correct as scrolling
-// forward. The only change is the input — "everything the playhead has
-// passed" (from the timeline engine) instead of "every tile up to the
-// current index."
+// Same "derive, don't track" principle as always: the archive is
+// recomputed from scratch from whatever the playhead has reached, so
+// scrolling backward is exactly as correct as scrolling forward.
+//
+// Tiers come from repetition across roles and experiences:
+//   1 = Professional · 2 = Advanced · 3 or more = Expert
+// The dock shows the most recently gained or upgraded skills first (what
+// the visitor just scrolled past); "See all" groups everything by tier.
 // ============================================================
 
-let skillLevels = new Map();     // last-rendered state: skill name -> level (count so far)
-const skillElements = new Map(); // skill name -> its DOM token, so we can update/remove it
-const SKILL_STAGGER_MS = 45;     // tokens pop in one by one, not all at once
-const SKILL_STAGGER_CAP = 18;    // ...but a 30-skill role shouldn't take 2 seconds
+const TIER_NAMES = { 1: "Professional", 2: "Advanced", 3: "Expert" };
+const TIER_NOTES = {
+  3: "Used across three or more roles and experiences",
+  2: "Used across two roles and experiences",
+  1: "Used in one role or experience"
+};
+const tierOf = (count) => (count >= 3 ? 3 : count === 2 ? 2 : 1);
+
+let skillState = new Map();      // name -> { count, tier, pos }
+const skillElements = new Map(); // name -> its token in the dock
 
 document.addEventListener("timeline:reachedchange", (e) => {
   updateSkillArchive(e.detail.reachedIds);
@@ -182,112 +261,158 @@ document.addEventListener("timeline:reachedchange", (e) => {
 // segment and behind the full-screen resume.
 document.addEventListener("timeline:zonechange", (e) => {
   document.getElementById("skill-dock").classList.toggle("is-hidden", e.detail.zone !== "timeline");
+  if (e.detail.zone !== "timeline") closeSkillPanel();
 });
 
 function findEntry(id) {
   return timeline.find((e) => e.id === id) || education.find((e) => e.id === id);
 }
 
-// Skills are counted from any reached entry that defines them (today
-// that's Experiences; a Point or Education entry with a `skills` array
-// would count too). Tags are ignored here — they only route skills on
-// the resume.
-function computeSkillLevelsForIds(ids) {
-  const levels = new Map();
-  ids.forEach((id) => {
-    const entry = findEntry(id);
-    if (!entry || !entry.skills) return;
-    entry.skills.forEach((skill) => {
-      levels.set(skill.name, (levels.get(skill.name) || 0) + 1);
+// Chronological position of any entry type, so "most recent" means most
+// recent in your career, not the order the engine happened to list them.
+function chronoKey(entry) {
+  const ym = entry.type === "experience" ? entry.dates.start
+    : entry.type === "point" ? entry.date
+      : entry.start || entry.date || `${entry.year}-06`;
+  const [y, m] = String(ym).split("-").map(Number);
+  return y * 12 + ((m || 1) - 1);
+}
+
+function computeSkillState(reachedIds) {
+  const entries = reachedIds.map(findEntry).filter(Boolean).sort((a, b) => chronoKey(a) - chronoKey(b));
+  const state = new Map();
+  entries.forEach((entry, entryIndex) => {
+    (entry.skills || []).forEach((raw, skillIndex) => {
+      const name = typeof raw === "string" ? raw : raw.name;
+      const count = (state.has(name) ? state.get(name).count : 0) + 1;
+      state.set(name, { count, tier: tierOf(count), pos: entryIndex * 1000 + skillIndex });
     });
   });
-  return levels;
+  return state;
 }
 
 function updateSkillArchive(reachedIds) {
-  const newLevels = computeSkillLevelsForIds(reachedIds);
+  const next = computeSkillState(reachedIds);
   const added = [];
   const upgraded = [];
   const removed = [];
-
-  // Present before but missing now = we scrolled back past that skill's
-  // only occurrence. Anything new or whose count changed gets added or
-  // re-badged (a "downgrade" from scrolling back uses the same path).
-  skillLevels.forEach((_, name) => {
-    if (!newLevels.has(name)) removed.push(name);
+  skillState.forEach((_, name) => { if (!next.has(name)) removed.push(name); });
+  next.forEach((s, name) => {
+    const previous = skillState.get(name);
+    if (!previous) added.push(name);
+    else if (s.tier > previous.tier) upgraded.push(name);
   });
-  newLevels.forEach((level, name) => {
-    const previous = skillLevels.get(name);
-    if (previous === undefined) added.push([name, level]);
-    else if (previous !== level) upgraded.push([name, level]);
-  });
-
-  removed.forEach((name) => removeSkillToken(name));
-  added.forEach(([name, level], i) => addSkillToken(name, level, i));
-  upgraded.forEach(([name, level], i) => upgradeSkillToken(name, level, i));
-  skillLevels = newLevels;
-
-  document.getElementById("skill-count").textContent = newLevels.size ? String(newLevels.size) : "";
+  skillState = next;
+  renderSkillDock(added, upgraded, removed);
 
   if (added.length || upgraded.length || removed.length) {
-    document.dispatchEvent(new CustomEvent("skills:changed", {
-      detail: { added: added.map(([n]) => n), upgraded: upgraded.map(([n]) => n), removed }
-    }));
+    document.dispatchEvent(new CustomEvent("skills:changed", { detail: { added, upgraded, removed } }));
     const parts = [];
     if (added.length) parts.push(`${added.length} new skill${added.length === 1 ? "" : "s"}`);
-    if (upgraded.length) parts.push(`${upgraded.length} upgraded`);
-    if (parts.length) Timeline.announce("skills", `${parts.join(", ")}.`);
+    upgraded.forEach((name) => parts.push(`${name} is now ${TIER_NAMES[next.get(name).tier]}`));
+    if (parts.length) Timeline.announce("skills", `${parts.slice(0, 4).join(". ")}.`);
   }
 }
 
-function renderSkillTokenContent(name, level) {
-  const levelBadge = level > 1 ? `<span class="skill-level">&times;${level}</span>` : "";
-  return `<span class="skill-name">${name}</span>${levelBadge}`;
+function skillTokenHtml(name, tier) {
+  return `<span class="skill-pips" aria-hidden="true"><i></i><i></i><i></i></span><span class="skill-name">${name}</span><span class="sr-only">, ${TIER_NAMES[tier]}</span>`;
 }
 
-function addSkillToken(name, level, order = 0) {
+function setTokenTier(token, name, s) {
+  if (token.dataset.tier === String(s.tier)) return;
+  token.dataset.tier = s.tier;
+  token.title = `${TIER_NAMES[s.tier]}: ${TIER_NOTES[s.tier].toLowerCase()}`;
+  token.innerHTML = skillTokenHtml(name, s.tier);
+}
+
+function renderSkillDock(added, upgraded, removed) {
   const archive = document.getElementById("skill-archive");
-  const token = document.createElement("div");
-  token.classList.add("skill-token");
-  token.dataset.skill = name;
-  token.innerHTML = renderSkillTokenContent(name, level);
-  const delay = Math.min(order, SKILL_STAGGER_CAP) * SKILL_STAGGER_MS;
-  token.style.transitionDelay = `${delay}ms`;
-  archive.appendChild(token);
-  skillElements.set(name, token);
 
-  // Starts at opacity:0/scaled-down via CSS. Adding .is-visible on the
-  // next frame (rather than immediately) is what lets the browser
-  // actually animate the transition instead of skipping to the end.
-  requestAnimationFrame(() => token.classList.add("is-visible"));
-  setTimeout(() => { token.style.transitionDelay = ""; }, delay + 300);
+  removed.forEach((name) => {
+    const token = skillElements.get(name);
+    if (!token) return;
+    skillElements.delete(name);
+    token.classList.remove("is-visible");
+    token.classList.add("is-leaving");
+    setTimeout(() => token.remove(), 200);
+  });
+
+  // Most recently gained or upgraded first. The strip shows as many rows
+  // as fit — no scrollbar — and "See all" holds the complete list.
+  const order = [...skillState.entries()].sort((a, b) => b[1].pos - a[1].pos);
+  let stagger = 0;
+  order.forEach(([name, s]) => {
+    let token = skillElements.get(name);
+    if (!token) {
+      token = document.createElement("div");
+      token.className = "skill-token";
+      skillElements.set(name, token);
+      const delay = Math.min(stagger++, 18) * 40;
+      token.style.transitionDelay = `${delay}ms`;
+      requestAnimationFrame(() => token.classList.add("is-visible"));
+      setTimeout(() => { token.style.transitionDelay = ""; }, delay + 300);
+    }
+    setTokenTier(token, name, s);
+    archive.appendChild(token); // appending in order is what (re)orders the strip
+  });
+
+  upgraded.forEach((name, i) => {
+    const token = skillElements.get(name);
+    if (!token) return;
+    setTimeout(() => {
+      if (skillElements.get(name) !== token) return;
+      token.classList.remove("just-upgraded");
+      void token.offsetWidth; // restart the animation even if it's mid-play
+      token.classList.add("just-upgraded");
+    }, Math.min(i, 12) * 70);
+  });
+
+  const counts = { 1: 0, 2: 0, 3: 0 };
+  skillState.forEach((s) => { counts[s.tier] += 1; });
+  document.getElementById("skill-tier-counts").innerHTML = [3, 2, 1]
+    .map((t) => `<span class="tier-count" data-tier="${t}"><span class="skill-pips" aria-hidden="true"><i></i><i></i><i></i></span>${counts[t]} ${TIER_NAMES[t]}</span>`)
+    .join("");
+  document.getElementById("skill-count").textContent = skillState.size;
+  if (!document.getElementById("skill-panel").hidden) renderSkillPanel();
 }
 
-function upgradeSkillToken(name, level, order = 0) {
-  const token = skillElements.get(name);
-  if (!token) return;
-  token.innerHTML = renderSkillTokenContent(name, level);
-  // Re-trigger the pulse even if it's already playing: remove the class,
-  // force the browser to acknowledge it (offsetWidth read), re-add it.
-  setTimeout(() => {
-    if (skillElements.get(name) !== token) return; // removed in the meantime
-    token.classList.remove("just-upgraded");
-    void token.offsetWidth;
-    token.classList.add("just-upgraded");
-  }, Math.min(order, SKILL_STAGGER_CAP) * 70);
+function renderSkillPanel() {
+  const groups = { 1: [], 2: [], 3: [] };
+  skillState.forEach((s, name) => groups[s.tier].push(name));
+  const html = [3, 2, 1].filter((t) => groups[t].length).map((t) => `
+    <section class="skill-group" data-tier="${t}">
+      <h3>${TIER_NAMES[t]} <span class="skill-group-count">${groups[t].length}</span></h3>
+      <p class="skill-group-note">${TIER_NOTES[t]}</p>
+      <ul>${groups[t].sort((a, b) => a.localeCompare(b)).map((name) => `<li class="skill-token is-visible" data-tier="${t}">${skillTokenHtml(name, t)}</li>`).join("")}</ul>
+    </section>`).join("");
+  document.getElementById("skill-panel-body").innerHTML =
+    html || `<p class="skill-panel-empty">Skills collect here as you move through the timeline.</p>`;
 }
 
-function removeSkillToken(name) {
-  const token = skillElements.get(name);
-  if (!token) return;
-  token.style.transitionDelay = "";
-  token.classList.remove("is-visible");
-  token.classList.add("is-leaving");
-  skillElements.delete(name);
-  // Remove from the DOM only after the fade-out (250ms, matching the
-  // CSS), not instantly — otherwise it'd just vanish with no animation.
-  setTimeout(() => token.remove(), 250);
+function openSkillPanel() {
+  const panel = document.getElementById("skill-panel");
+  if (!panel.hidden) return;
+  Timeline.collapse();
+  renderSkillPanel();
+  panel.hidden = false;
+  Timeline.lock("skills");
+  document.getElementById("skill-panel-close").focus();
 }
+
+function closeSkillPanel() {
+  const panel = document.getElementById("skill-panel");
+  if (panel.hidden) return;
+  panel.hidden = true;
+  Timeline.unlock("skills");
+  const opener = document.getElementById("skill-panel-open");
+  if (document.getElementById("skill-dock").contains(opener)) opener.focus({ preventScroll: true });
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#skill-panel-open")) openSkillPanel();
+  else if (event.target.closest("#skill-panel-close")) closeSkillPanel();
+  else if (event.target.id === "skill-panel") closeSkillPanel(); // click on the backdrop
+});
 
 // ============================================================
 // DETAIL HOVER POPUPS
@@ -542,7 +667,8 @@ function buildResumeData(selection) {
     professional,
     pointsSection: { label: normalizePointsHeader(selection.pointsHeader), entries: pointsEntries },
     fluency: normalizeFluency(selection.fluency),
-    education
+    // The resume's Education section stays as the template defines it.
+    education: education.filter((ed) => ed.onResume !== false)
   };
 }
 
@@ -589,8 +715,6 @@ function renderResume(data) {
         `<p class="resume-education">${ed.degree} | ${ed.institution} | ${ed.location} | ${ed.year}</p>`
       ).join("")}
     </section>
-
-    <button id="download-resume" type="button">Download PDF</button>
   `;
 }
 
@@ -640,6 +764,11 @@ const PAGE_CONTENT_HEIGHT_PX = (11 - 1) * 96; // 10in of content, in px
 // .resume-entry straddles the page-1/page-2 boundary.
 function analyzeLayout(html) {
   const measurer = document.createElement("div");
+  // The "resume-doc" class gives the measurer the SAME typography as the
+  // real resume. (Before, it inherited the page's default text size —
+  // larger than the resume's 10.5pt — so resumes measured long and got
+  // trimmed more than they needed to be.)
+  measurer.className = "resume-doc";
   measurer.style.cssText =
     `position: fixed; visibility: hidden; pointer-events: none; ` +
     `top: -99999px; left: -99999px; width: ${PAGE_CONTENT_WIDTH_IN}in;`;
@@ -669,6 +798,8 @@ function analyzeLayout(html) {
 // latency. Returns the finalized SELECTION; the header is written
 // against this finished body afterward, in compileResume().
 async function fitSelectionToTwoPages(selection, curatedEntries) {
+  // Measure with the real fonts, not the fallback shown while they load.
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
   let current = selection;
   let layout = analyzeLayout(renderResume(buildResumeData(current)));
 
@@ -721,10 +852,8 @@ async function requestResumeRevision(curatedEntries, previousSelection, estimate
   }
 }
 
-// Renders once, the first time the visitor reaches the outro.
-// resumeRendering guards against overlapping async work.
+// Set once the resume has been compiled and rendered into the sheet.
 let resumeRendered = false;
-let resumeRendering = false;
 
 async function compileResume() {
   // Only resume-eligible entries ever reach the resume AI: a Point marked
@@ -733,7 +862,7 @@ async function compileResume() {
   const curatedEntries = (lastCuration
     ? timeline.filter((e) => lastCuration.includedIds.includes(e.id))
     : timeline
-  ).filter((e) => e.type !== "point" || e.resumeEligible !== false);
+  ).filter((e) => e.type !== "point" || e.resumeEligible !== false).map(forApi);
 
   let selection;
   try {
@@ -846,67 +975,95 @@ document.addEventListener("timeline:zonechange", (e) => {
 });
 
 // ============================================================
-// FULL-SCREEN RESUME OVERLAY
-// Driven entirely by the timeline's zone: reaching the outro opens it,
-// leaving the outro (including via the Back button) closes it. No
-// separately managed open/close state to fall out of sync.
+// THE OUTRO & FULL-SCREEN RESUME
+// Reaching the end brings "Your tailored resume" fully on screen; it
+// sits for a moment (and waits for the resume if it isn't ready yet),
+// then the resume opens. Leaving the end closes it. All of it is driven
+// by the timeline's zone — no separate open/close state to drift.
 // ============================================================
 
-document.addEventListener("timeline:zonechange", async (e) => {
-  const overlay = document.getElementById("resume-overlay");
-  const stage = document.getElementById("stage");
+let outroToken = 0;
+let outroVisits = 0;
+let resumeRenderPromise = null;
 
-  if (e.detail.zone !== "outro") {
-    if (!overlay.hidden) {
-      const focusWasInOverlay = overlay.contains(document.activeElement);
-      overlay.hidden = true;
-      stage.inert = false; // restore keyboard/AT access to the timeline
-      if (focusWasInOverlay || document.activeElement === document.body) {
-        document.getElementById("track").focus({ preventScroll: true });
-      }
-    }
+function setOutroStatus(state) {
+  const status = document.getElementById("outro-status");
+  if (!status) return;
+  status.classList.toggle("is-pending", state === "pending");
+  status.textContent = state === "pending" ? "Pulling your file from the cabinet" : "Ready. Opening it now.";
+}
+
+// Compiles once (reusing the prefetch), renders into the sheet once.
+function ensureResumeRendered() {
+  if (!resumeRenderPromise) {
+    resumeRenderPromise = (async () => {
+      if (!resumeCompilePromise) resumeCompilePromise = compileResume();
+      document.getElementById("resume-content").innerHTML = await resumeCompilePromise;
+      resumeRendered = true;
+    })();
+  }
+  return resumeRenderPromise;
+}
+
+document.addEventListener("timeline:zonechange", (e) => {
+  if (e.detail.zone === "outro") {
+    enterOutro();
     return;
   }
-
-  overlay.hidden = false;
-  // `inert` removes the whole timeline from the tab order and the
-  // accessibility tree while the overlay covers it.
-  stage.inert = true;
-  // Move focus into the dialog, matching expected modal behavior.
-  document.getElementById("resume-back").focus();
-
-  if (resumeRendered || resumeRendering) return; // already compiled, or in progress
-
-  resumeRendering = true;
-  document.getElementById("resume-content").innerHTML =
-    `<p role="status">One moment while I put together your resume&hellip;</p>`;
-
-  // Reuses the prefetched call — usually already resolved by now.
-  const html = await (resumeCompilePromise || compileResume());
-
-  document.getElementById("resume-content").innerHTML = html;
-  resumeRendered = true;
-  resumeRendering = false;
-
-  // The visitor may have scrolled away DURING compilation — only force
-  // the overlay open if they're still at the end.
-  if (Timeline.getZone() === "outro") {
-    overlay.hidden = false;
-    stage.inert = true;
-  }
+  outroToken++; // cancels a pending open
+  closeResumeOverlay();
 });
 
-// Escape closes the overlay the same way the Back button does.
-document.addEventListener("keydown", (event) => {
+async function enterOutro() {
+  const token = ++outroToken;
+  const dwell = outroVisits++ === 0 ? 1600 : 900; // a shorter pause on return visits
+  setOutroStatus(resumeRendered ? "ready" : "pending");
+  const started = performance.now();
+  await ensureResumeRendered();
+  if (token !== outroToken) return;
+  setOutroStatus("ready");
+  // Sit for 1-2 seconds; if the resume finished late, still show "Ready"
+  // briefly so the switch never feels abrupt.
+  await wait(Math.max(dwell - (performance.now() - started), 600));
+  if (token !== outroToken || Timeline.getZone() !== "outro") return;
+  openResumeOverlay();
+}
+
+function openResumeOverlay() {
   const overlay = document.getElementById("resume-overlay");
-  if (event.key === "Escape" && !overlay.hidden) {
-    goBackToTimeline();
+  overlay.hidden = false;
+  overlay.scrollTop = 0;
+  // `inert` removes the whole timeline from the tab order and the
+  // accessibility tree while the resume covers it.
+  document.getElementById("stage").inert = true;
+  document.getElementById("resume-back").focus();
+  scheduleLeadPrompt();
+}
+
+function closeResumeOverlay() {
+  cancelLeadPrompt();
+  closeLeadDialog(false);
+  const overlay = document.getElementById("resume-overlay");
+  if (overlay.hidden) return;
+  const focusWasInOverlay = overlay.contains(document.activeElement);
+  overlay.hidden = true;
+  document.getElementById("stage").inert = false;
+  if (focusWasInOverlay || document.activeElement === document.body) {
+    document.getElementById("track").focus({ preventScroll: true });
   }
+}
+
+// Escape closes the topmost thing: the email popup, then the skills
+// sheet, then the resume itself.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!document.getElementById("lead-dialog").hidden) closeLeadDialog(true);
+  else if (!document.getElementById("skill-panel").hidden) closeSkillPanel();
+  else if (!document.getElementById("resume-overlay").hidden) goBackToTimeline();
 });
 
-// Back button: scrolls the timeline back into the current role. That's
-// a genuine scroll, so the zone listener above closes the overlay and
-// returns focus to the timeline on its own.
+// Back: scrolls the timeline back into the current role. That's a real
+// scroll, so the zone listener above closes the resume on its own.
 document.addEventListener("click", (event) => {
   if (event.target.closest("#resume-back")) goBackToTimeline();
 });
@@ -915,7 +1072,6 @@ function goBackToTimeline() {
   Timeline.scrollToEnd();
 }
 
-// Delegated so it keeps working if the resume is ever re-rendered.
 document.addEventListener("click", (event) => {
   if (event.target.closest("#download-resume")) {
     document.dispatchEvent(new CustomEvent("resume:downloadclicked"));
@@ -924,8 +1080,65 @@ document.addEventListener("click", (event) => {
 });
 
 // ============================================================
-// LEAD CAPTURE (mocked pending the real backend)
+// LEAD CAPTURE — a popup after 7 seconds on the resume
+// Shown automatically once. Closing it leaves a quiet "Want more
+// information?" button under the resume that reopens it. Submission is
+// mocked pending the backend.
 // ============================================================
+
+const LEAD_PROMPT_DELAY_MS = 7000;
+let leadTimer = null;
+let leadAutoShown = false;
+let leadSubmitted = false;
+
+function scheduleLeadPrompt() {
+  cancelLeadPrompt();
+  updateMoreInfoBar();
+  if (leadAutoShown || leadSubmitted) return;
+  leadTimer = setTimeout(() => {
+    leadTimer = null;
+    if (document.getElementById("resume-overlay").hidden) return;
+    leadAutoShown = true;
+    openLeadDialog();
+  }, LEAD_PROMPT_DELAY_MS);
+}
+
+function cancelLeadPrompt() {
+  clearTimeout(leadTimer);
+  leadTimer = null;
+}
+
+function updateMoreInfoBar() {
+  document.getElementById("more-info-bar").hidden =
+    leadSubmitted || !leadAutoShown || !document.getElementById("lead-dialog").hidden;
+}
+
+function openLeadDialog() {
+  const dialog = document.getElementById("lead-dialog");
+  dialog.hidden = false;
+  document.getElementById("resume-page").inert = true;
+  updateMoreInfoBar();
+  const target = leadSubmitted ? document.getElementById("lead-close") : document.getElementById("lead-email");
+  target.focus();
+}
+
+function closeLeadDialog(returnFocus) {
+  const dialog = document.getElementById("lead-dialog");
+  if (dialog.hidden) return;
+  dialog.hidden = true;
+  document.getElementById("resume-page").inert = false;
+  updateMoreInfoBar();
+  if (returnFocus) {
+    const bar = document.getElementById("more-info-open");
+    (leadSubmitted || bar.offsetParent === null ? document.getElementById("resume-back") : bar).focus();
+  }
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#more-info-open")) openLeadDialog();
+  else if (event.target.closest("#lead-close")) closeLeadDialog(true);
+  else if (event.target.id === "lead-dialog") closeLeadDialog(true); // click on the backdrop
+});
 
 document.getElementById("lead-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -935,15 +1148,16 @@ document.getElementById("lead-form").addEventListener("submit", (event) => {
 });
 
 function submitLead(email, company) {
-  // TODO: replace with a real fetch() call to a backend endpoint once
-  // deployed — e.g. fetch("/api/submit-lead", { method: "POST", ... }).
-  // That endpoint writes to storage and triggers the video email; this
-  // function's job ends at handing off the data.
+  // TODO: replace with a real fetch() to a backend endpoint once deployed —
+  // e.g. fetch("/api/submit-lead", { method: "POST", ... }). That endpoint
+  // writes to storage and triggers the video email.
   console.log("Lead captured (mock):", { email, company });
   document.dispatchEvent(new CustomEvent("lead:submitted", { detail: { email, company } }));
-
+  leadSubmitted = true;
   document.getElementById("lead-form").hidden = true;
   document.getElementById("lead-confirmation").hidden = false;
+  document.getElementById("lead-close").focus();
+  updateMoreInfoBar();
 }
 
 // ============================================================
@@ -1025,10 +1239,10 @@ function setupDebugPanel() {
     logEntry(`Card ${expanded ? "expanded" : "collapsed"}: ${id}`);
   });
 
-  // skillLevels is already updated by the time skills:changed fires,
+  // skillState is already updated by the time skills:changed fires,
   // so the summary is always current.
   document.addEventListener("skills:changed", (e) => {
-    const all = Array.from(skillLevels.entries()).map(([name, level]) => `${name}×${level}`);
+    const all = Array.from(skillState.entries()).map(([name, s]) => `${name} (${TIER_NAMES[s.tier]})`);
     const preview = all.slice(0, 4).join(", ");
     setText("debug-skills", all.length
       ? `${all.length} — ${preview}${all.length > 4 ? `, +${all.length - 4} more` : ""}`

@@ -30,6 +30,14 @@
 //       endDate: optional "YYYY-MM" for a ranged item
 //       resumeEligible: false — timeline only; never sent to the resume AI
 //   education — separate array below; always shown, never AI-judged.
+//       start / end: "YYYY-MM" — draws a "started" node and a study line
+//                    below the axis, ending at the graduation station
+//       noDegree:    true — the line ends without a graduation station
+//       onResume:    false — timeline only
+//   skills (any entry) — drive the timeline's skill archive only. They are
+//     NEVER sent to the AI, so an inferred skill can't leak into a resume
+//     bullet as if it were a stated fact. Tiers come from repetition:
+//     1 entry = Professional, 2 = Advanced, 3+ = Expert.
 // ============================================================
 
 const timeline = [
@@ -57,42 +65,65 @@ const timeline = [
       "Represent Implementation in testing and rollout of new AI and digital-adoption capabilities, including Microsoft Copilot, WalkMe, and an AI-assisted flat-file integration workflow using schema inference to interpret nonstandard client file structures without fixed templates; tested real-world use cases and provided product and technical feedback supporting broader rollout and adoption.",
       "Lead cross-functional project teams of up to 12–15 participants across implementation, technical, commercial, and customer organizations; serve as a formal mentor and technical resource for implementation professionals."
     ],
-    // Drives the timeline's skill archive only. Tags are no longer used by
-    // the resume — Core Expertise and Fluency now come from resumeOptions.
     skills: [
-      { name: "Technical Program Leadership", tags: ["expertise"] },
-      { name: "Product Requirements & Discovery", tags: ["expertise"] },
-      { name: "Enterprise AI Adoption", tags: ["expertise"] },
-      { name: "Systems Integration", tags: ["expertise"] },
-      { name: "ERP & Business Systems", tags: ["expertise"] },
-      { name: "APIs & Data Integration", tags: ["expertise"] },
-      { name: "Product Development Collaboration", tags: ["expertise"] },
-      { name: "User Adoption", tags: ["expertise"] },
-      { name: "Executive Stakeholder Leadership", tags: ["expertise"] },
-      { name: "Emerging Technology Evaluation", tags: ["expertise"] },
-      { name: "Testing & Validation", tags: ["expertise", "softTechnical"] },
-      { name: "Program Recovery", tags: ["expertise"] },
-      { name: "APIs", tags: ["hardTechnical"] },
-      { name: "Python", tags: ["hardTechnical"] },
-      { name: "CLI Workflows", tags: ["hardTechnical"] },
-      { name: "JSON", tags: ["hardTechnical"] },
-      { name: "XML", tags: ["hardTechnical"] },
-      { name: "CSV / Flat-File Integration", tags: ["hardTechnical"] },
-      { name: "Data & Schema Mapping", tags: ["hardTechnical"] },
-      { name: "SQL Familiarity", tags: ["hardTechnical"] },
-      { name: "Identity/SSO", tags: ["hardTechnical"] },
-      { name: "Multi-ERP Environments", tags: ["hardTechnical"] },
-      { name: "LLM API Integration", tags: ["hardTechnical"] },
-      { name: "Retrieval-Augmented Generation (RAG)", tags: ["hardTechnical"] },
-      { name: "Embeddings & Vector Search", tags: ["hardTechnical"] },
-      { name: "Tool Calling", tags: ["hardTechnical"] },
-      { name: "Structured Outputs", tags: ["hardTechnical"] },
-      { name: "Prompt & Context Management", tags: ["hardTechnical"] },
-      { name: "AI Evaluation & Confidence Handling", tags: ["hardTechnical"] },
-      { name: "Emergent Requirements & Rapid Problem Resolution", tags: ["softTechnical"] },
-      { name: "Multi-Stage Deployment & Operational Adoption", tags: ["softTechnical"] },
-      { name: "Integration Troubleshooting", tags: ["softTechnical"] },
-      { name: "Technical Requirements Translation", tags: ["softTechnical"] }
+      "Technical Program Leadership",
+      "Enterprise SaaS Implementation",
+      "Organizational & Cross-Functional Leadership",
+      "Executive Stakeholder Management",
+      "Technical Solution Configuration",
+      "ERP & Financial-System Integrations",
+      "APIs & Data Integration",
+      "Risk & Escalation Management",
+      "Revenue Realization & Expansion",
+      "Process Improvement",
+      "Commercial Strategy",
+      "Training & Mentorship",
+      "Cross-Functional Program Delivery",
+      "Product Validation & Technical Feedback",
+      "Technical Requirements Translation",
+      "Strategic Program Leadership",
+      "Business Transformation",
+      "Program Recovery & Escalation",
+      "Project Prioritization",
+      "Organizational Change & Adoption",
+      "Vendor & Stakeholder Coordination",
+      "Systems Integration & Deployment",
+      "International Operations",
+      "Enterprise Technology",
+      "Testing & Validation",
+      "Training & Operational Adoption",
+      "Emergent Requirements Management",
+      "Client Relationship Management",
+      "SAP Concur Travel, Expense & Invoice",
+      "Enterprise SaaS Configuration",
+      "APIs",
+      "XML",
+      "SFTP",
+      "Flat-File Integrations",
+      "Data Mapping",
+      "Identity/SSO",
+      "SQL Familiarity",
+      "Multi-ERP Environments",
+      "Jira",
+      "Gainsight",
+      "SAP ERP",
+      "Oracle",
+      "QuickBooks",
+      "Sage",
+      "Salesforce",
+      "ServiceNow",
+      "Microsoft Excel",
+      "Integration Troubleshooting",
+      "Multi-Stage Deployment & Operational Adoption",
+      "Microsoft Copilot",
+      "WalkMe",
+      "Microsoft Office Suite",
+      "SAP Project Management (Certified)",
+      "Concur Expense (Certified)",
+      "Concur Invoice (Certified)",
+      "SAP RISE",
+      "SAP GROW",
+      "Challenger Sales"
     ],
     details: []
   },
@@ -110,7 +141,18 @@ const timeline = [
       "Built and directed a distributed campaign organization spanning 36 Iowa counties, personally recruiting volunteers, county captains, and local leaders; established organizational structure, assigned responsibilities, and managed execution across field operations.",
       "Managed independent contractors, vendors, creative development, production, procurement, campaign strategy, public communications, and stakeholder engagement across a competitive federal race; developed relationships with elected officials and community leaders throughout Iowa and won the Iowa Caucus straw poll for Iowa's 4th Congressional District."
     ],
-    skills: [],
+    skills: [
+      "Organizational & Cross-Functional Leadership",
+      "Strategic Program Leadership",
+      "Volunteer Recruitment & Management",
+      "Vendor & Stakeholder Coordination",
+      "Public Communications",
+      "Public Speaking",
+      "Community Engagement",
+      "Procurement",
+      "Budget Management",
+      "Field Operations"
+    ],
     details: []
   },
   {
@@ -126,7 +168,17 @@ const timeline = [
       "Led rollout and adoption of Exact Sciences' colorectal-cancer reporting platform across 70+ physician practices and hospital environments, supporting hundreds of healthcare providers and delivering software, workflow, and strategy presentations to audiences of 300+ personnel and healthcare-system executives.",
       "Directed provider engagement and technology-adoption strategy in coordination with field and commercial teams, producing 20%+ quarter-over-quarter adoption growth during 2021 and routinely positioning the territory among the organization's strongest performers."
     ],
-    skills: [],
+    skills: [
+      "Organizational Change & Adoption",
+      "Training & Operational Adoption",
+      "Executive Stakeholder Management",
+      "Public Speaking",
+      "Client Relationship Management",
+      "Commercial Strategy",
+      "Consultative Sales",
+      "Healthcare Technology",
+      "Microsoft Office Suite"
+    ],
     details: []
   },
   {
@@ -141,7 +193,16 @@ const timeline = [
     achievements: [
       "Managed multi-phase international programs serving hundreds of participants, coordinating execution across government officials, U.S. Embassy personnel, NGOs, and institutional partners while working on-site in Bucharest for 4+ months; delivered against budget, scope, and quality requirements."
     ],
-    skills: [],
+    skills: [
+      "Cross-Functional Program Delivery",
+      "International Operations",
+      "Vendor & Stakeholder Coordination",
+      "Executive Stakeholder Management",
+      "Cross-Cultural Communication",
+      "Budget Management",
+      "Logistics Coordination",
+      "Microsoft Office Suite"
+    ],
     details: []
   },
   {
@@ -157,7 +218,16 @@ const timeline = [
       "Ranked in the 93rd percentile nationally for overall banker sales performance across JPMorgan Chase's consumer-banking organization.",
       "Developed a proactive banker-advisor engagement strategy that drove 167% growth in first-time investor activity by replacing passive referral practices with targeted client identification."
     ],
-    skills: [],
+    skills: [
+      "Consultative Sales",
+      "Client Relationship Management",
+      "Financial Services",
+      "Customer Service",
+      "Commercial Strategy",
+      "Process Improvement",
+      "Microsoft Office Suite",
+      "Microsoft Excel"
+    ],
     details: []
   },
   {
@@ -175,7 +245,13 @@ const timeline = [
     achievements: [
       "Supported U.S. diplomatic mission operations in General Services, coordinating motor-pool scheduling, official movements, and transport of sensitive identity documents; selected for motorcade support during a visit by the U.S. Under Secretary of Energy, serving in the lead vehicle for advance arrival, staging, and airport-movement coordination."
     ],
-    skills: [],
+    skills: [
+      "Logistics Coordination",
+      "International Operations",
+      "Cross-Cultural Communication",
+      "Security Protocols",
+      "Microsoft Office Suite"
+    ],
     details: []
   },
 
@@ -188,6 +264,16 @@ const timeline = [
     date: "2026-05",
     bullets: [
       "Built a local LLM-assisted prototype that compares ERP source schemas with target integration templates, retrieves relevant technical documentation, and generates source-grounded field-mapping recommendations with confidence flags and supporting rationale."
+    ],
+    skills: [
+      "LLM API Integration",
+      "Retrieval-Augmented Generation (RAG)",
+      "Embeddings & Vector Search",
+      "Python",
+      "Data Mapping",
+      "ERP & Financial-System Integrations",
+      "AI Evaluation & Confidence Handling",
+      "Prompt & Context Management"
     ]
   },
   {
@@ -199,6 +285,19 @@ const timeline = [
     bullets: [
       "Designed and built a full-stack, AI-powered interactive resume platform (vanilla JS frontend, serverless Node.js backend on Vercel) featuring a scroll-driven career timeline, with APIs performing live web search to analyze real job postings and dynamically tailoring content to each specific role.",
       "Engineered a multi-stage LLM pipeline with structured-output extraction, iterative page-fit correction, and automated resume header generation - resulting in accurately compiled, properly-formatted two-page resumes and PDFs in real time, backed by rate limiting, input validation, and fail-safe fallbacks for production reliability."
+    ],
+    skills: [
+      "JavaScript",
+      "HTML & CSS",
+      "Node.js",
+      "Serverless Functions (Vercel)",
+      "Git & GitHub",
+      "LLM API Integration",
+      "Prompt & Context Management",
+      "Structured Outputs & Tool Calling",
+      "APIs",
+      "Testing & Validation",
+      "Web Accessibility"
     ]
   },
   {
@@ -210,6 +309,16 @@ const timeline = [
     bullets: [
       "Plan and execute residential and agricultural construction projects from architectural design, from site work through finish - including material selection and procurement, sequencing, supplier and trade coordination, and substantial hands-on construction.",
       "Practical experience across concrete, structural framing, roofing, building-envelope and waterproofing systems; interior finish work, and mechanical/electrical coordination; routinely evaluate products and construction methods for performance, cost, and constructability."
+    ],
+    skills: [
+      "Construction Management",
+      "Procurement",
+      "Vendor & Stakeholder Coordination",
+      "Budget Management",
+      "Concrete & Structural Framing",
+      "Roofing & Building Envelope",
+      "Mechanical & Electrical Coordination",
+      "Cost & Constructability Analysis"
     ]
   },
   {
@@ -221,6 +330,13 @@ const timeline = [
     bullets: [
       "Operate a small family livestock farm with my wife, raising lamb for meat and handling the full process from animal care and pasture management through processing coordination, packaging, sales, and customer delivery.",
       "Market and sell our own product directly to customers, including order fulfillment, shipping, local delivery, and the day-to-day upkeep and improvement of the farm."
+    ],
+    skills: [
+      "Livestock Management",
+      "Small Business Operations",
+      "Direct-to-Consumer Sales",
+      "Order Fulfillment",
+      "Customer Service"
     ]
   },
   {
@@ -232,6 +348,12 @@ const timeline = [
     endDate: "2020-01",
     bullets: [
       "Managed football equipment and logistics operations, including inventory, equipment issue/return, travel packing and itemization, storage, and practice-field setup; supervised 2–3 student staff under the coaching organization."
+    ],
+    skills: [
+      "Inventory Management",
+      "Logistics Coordination",
+      "Team Supervision",
+      "Operations Management"
     ]
   },
   {
@@ -242,6 +364,14 @@ const timeline = [
     date: "2024-02",
     bullets: [
       "Serve as a volunteer firefighter supporting basic fireground operations, including interior entry, suppression support, scene safety, equipment readiness, and EMS assistance; Iowa Firefighter I certified."
+    ],
+    skills: [
+      "Emergency Response",
+      "Fireground Operations",
+      "EMS Assistance",
+      "Scene Safety",
+      "Teamwork & Discipline",
+      "Iowa Firefighter I (Certified)"
     ]
   },
   {
@@ -253,6 +383,13 @@ const timeline = [
     date: "2026-02",
     bullets: [
       "Appointed Training Officer in Jan. 2026, responsible for helping plan, coordinate, and deliver department training to support firefighter readiness, procedural consistency, and safe operations."
+    ],
+    skills: [
+      "Training & Mentorship",
+      "Training Program Design",
+      "Emergency Response",
+      "Scene Safety",
+      "Leadership Development"
     ]
   },
   {
@@ -264,6 +401,12 @@ const timeline = [
     bullets: [
       "Serve as a part-time lay preacher, preparing and delivering sermons and leading worship services for local congregations.",
       "Participate in broader church life and congregational affairs, supporting service planning, pastoral needs, and community engagement as requested."
+    ],
+    skills: [
+      "Public Speaking",
+      "Writing & Communication",
+      "Community Engagement",
+      "Event Planning"
     ]
   },
   {
@@ -275,7 +418,8 @@ const timeline = [
     resumeEligible: false,
     bullets: [
       "Married my wife and built our home and life together in rural Iowa."
-    ]
+    ],
+    skills: []
   },
   {
     type: "point",
@@ -285,24 +429,32 @@ const timeline = [
     resumeEligible: false,
     bullets: [
       "Welcomed our first child and began a new chapter centered on family, responsibility, and the future."
-    ]
+    ],
+    skills: []
   }
 ];
 
 // Kept entirely SEPARATE from `timeline` on purpose — education entries
-// are never sent to the AI and never judged. js/timeline.js adds them
-// unconditionally as stations on the line. Optional fields: `start` /
-// `end` ("YYYY-MM") to draw a degree as a period instead of a station,
-// `date` ("YYYY-MM") to pin the graduation month (defaults to June of
-// `year`), and `bullets` for honors shown when the station is opened.
+// are never sent to the AI and never judged; js/timeline.js always adds
+// them. With start/end they get a study line below the axis; without, a
+// single graduation station (`date` "YYYY-MM" or June of `year`).
 const education = [
+  // Listed in RESUME order (the resume's Education section is static and
+  // shows only entries without onResume: false). The timeline sorts by date.
   {
     type: "education",
     id: "edu-stolaf",
     degree: "Bachelor of Arts, Political Science",
     institution: "St. Olaf College",
     location: "Northfield, Minnesota",
-    year: "2020"
+    // REVIEW: start/end months assumed (Sep 2017 matches the football role).
+    start: "2017-09",
+    end: "2020-05",
+    year: "2020",
+    skills: [
+      "Research & Analysis", "Policy Analysis", "Security Studies", "Writing & Communication", "Public Speaking",
+      "Russian (Basic Conversational)", "Arabic (University Study)"
+    ]
   },
   {
     type: "education",
@@ -310,7 +462,26 @@ const education = [
     degree: "Associate of Arts, Business Administration",
     institution: "Clark College",
     location: "Vancouver, Washington",
-    year: "2017"
+    // REVIEW: start month is a placeholder — please confirm.
+    start: "2015-09",
+    end: "2017-06",
+    year: "2017",
+    skills: ["Business Fundamentals", "Accounting Fundamentals", "Business Communication", "Microsoft Office Suite"]
+  },
+  {
+    type: "education",
+    id: "edu-uvm",
+    degree: "Undergraduate coursework, Army ROTC",
+    institution: "University of Vermont",
+    location: "Burlington, Vermont",
+    // REVIEW: dates are a placeholder covering the 2014-15 academic year.
+    start: "2014-08",
+    end: "2015-05",
+    noDegree: true,
+    note: "Some coursework, no degree received",
+    onResume: false, // timeline only — the resume's Education section stays as your template defines it
+    bullets: ["Enrolled in the Army ROTC program alongside undergraduate coursework."],
+    skills: ["Leadership Development", "Teamwork & Discipline", "Physical Fitness Training", "Land Navigation", "Military Customs & Courtesies"]
   }
 ];
 

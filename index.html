@@ -4,93 +4,123 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Interactive Resume</title>
+  <!-- Marcellus: an engraved, inscription-style serif for names and titles.
+       Hanken Grotesk: the interface text. Crimson Pro: the resume's body. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Marcellus&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
   <!--
     STAGE
-    A fixed, full-viewport frame. The page itself never scrolls
-    vertically — all movement happens horizontally inside #track, and
-    js/timeline.js translates vertical wheel input into that sideways
-    motion.
+    A fixed, full-viewport frame. The page itself never scrolls vertically —
+    all movement happens horizontally inside #track, and js/timeline.js
+    translates vertical wheel input into that sideways motion.
   -->
   <div id="stage">
 
     <div id="track-frame">
-      <!-- The actual horizontally-scrolling element. Everything that
-           moves through time (landing, axis, cards, points, outro) is
-           rendered into #track-content by js/timeline.js. tabindex +
-           role/aria-label make it reachable and understandable by
-           keyboard and screen-reader users. -->
+      <!-- The horizontally scrolling element. Everything that moves through
+           time (landing, axis, cards, points, outro) is rendered into
+           #track-content by js/timeline.js. -->
       <div id="track" tabindex="0" role="region" aria-label="Career timeline. Scroll, swipe, or use the arrow keys to move through time.">
         <div id="track-content"></div>
       </div>
 
-      <!-- The HUD sits ABOVE the track but doesn't scroll with it: the
-           playhead line, the date chip that rides on the axis, the
-           progress bar, and the chapter buttons. Hidden on the landing
-           and outro segments. -->
+      <!-- The HUD sits ABOVE the track but doesn't scroll with it. -->
       <div id="timeline-hud">
         <div id="timeline-progress"></div>
         <button id="timeline-brand" type="button" title="Back to the start">
-          <span id="timeline-brand-name"></span>
-          <span class="timeline-brand-sub">Career timeline</span>
+          <span class="monogram monogram-seal" aria-hidden="true">CS</span>
+          <span class="timeline-brand-text">
+            <span id="timeline-brand-name"></span>
+            <span class="timeline-brand-sub">Career timeline</span>
+          </span>
         </button>
         <div id="playhead-line" aria-hidden="true"></div>
         <div id="playhead-chip" aria-hidden="true"></div>
         <nav id="chapter-nav" aria-label="Timeline navigation">
           <button id="chapter-prev" type="button" aria-label="Previous chapter">
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button id="chapter-next" type="button" aria-label="Next chapter">
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </nav>
       </div>
     </div>
 
-    <!-- Skill archive dock. Tokens are appended into #skill-archive as
-         the playhead reaches each period, and removed when scrolling
-         back. Changes are announced (summarized) via
-         #timeline-announcer rather than token by token. -->
+    <!-- Skill dock: the most recently gained or upgraded skills, as many as
+         fit (no scrollbar), with tier totals and a "See all" sheet. -->
     <div id="skill-dock" class="is-hidden">
-      <span class="skill-dock-label">Skills <span id="skill-count"></span></span>
-      <div id="skill-archive"></div>
+      <div class="skill-dock-summary">
+        <span class="skill-dock-title">Skills</span>
+        <span id="skill-tier-counts"></span>
+      </div>
+      <div id="skill-archive" aria-label="Most recent skills"></div>
+      <button id="skill-panel-open" type="button">See all <span id="skill-count">0</span></button>
+    </div>
+
+    <!-- Every skill so far, grouped by tier. Locks the timeline while open. -->
+    <div id="skill-panel" role="dialog" aria-modal="true" aria-labelledby="skill-panel-title" hidden>
+      <div class="skill-panel-sheet">
+        <div class="skill-panel-header">
+          <h2 id="skill-panel-title">Skills so far</h2>
+          <button id="skill-panel-close" type="button">Close</button>
+        </div>
+        <p class="skill-panel-intro">Tiers reflect how often a skill shows up across roles and experiences: once is Professional, twice is Advanced, three or more times is Expert.</p>
+        <div id="skill-panel-body"></div>
+      </div>
     </div>
 
   </div>
 
-  <!-- Screen-reader announcements for chapter and skill changes —
-       debounced in js/timeline.js so fast scrolling isn't chatty.
-       Outside #stage so it keeps working while #stage is inert. -->
+  <!-- Screen-reader announcements for chapter and skill changes. Outside
+       #stage so it keeps working while #stage is inert. -->
   <div id="timeline-announcer" class="sr-only" aria-live="polite"></div>
 
-  <!-- Single reusable Detail popup, OUTSIDE #track so it's never
-       clipped by the scrolling container. Positioned by main.js. -->
+  <!-- Single reusable Detail popup, OUTSIDE #track so it's never clipped. -->
   <div id="detail-popup" role="tooltip" hidden></div>
 
-  <!-- Full-screen resume takeover, OUTSIDE #track entirely. Opened and
-       closed by main.js based on the timeline's zone (reaching the end
-       opens it). role="dialog"/aria-modal plus making #stage `inert`
-       while it's open keeps background content unreachable. -->
+  <!-- Full-screen resume, OUTSIDE #track entirely. Opened after the outro
+       has been on screen for a moment; closed by leaving the end. -->
   <div id="resume-overlay" role="dialog" aria-modal="true" aria-label="Resume" hidden>
-    <button id="resume-back" type="button" aria-label="Back to timeline">&larr; Back</button>
-    <div id="resume-content"></div>
+    <div id="resume-page">
+      <div class="resume-toolbar">
+        <button id="resume-back" type="button">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back to the timeline
+        </button>
+        <button id="download-resume" type="button">Download PDF</button>
+      </div>
+      <article class="resume-sheet">
+        <div id="resume-content" class="resume-doc"></div>
+      </article>
+      <div id="more-info-bar" hidden>
+        <button id="more-info-open" type="button">Want more information?</button>
+      </div>
+    </div>
 
-    <!-- Lead capture: NOT part of #resume-content on purpose, so it
-         never shows up in the printed/downloaded PDF. Submission is
+    <!-- Email popup: appears after 7 seconds on the resume. Submission is
          mocked — see submitLead() in main.js — pending the backend. -->
-    <div id="lead-capture">
-      <p>Want the story behind how this site was built? Leave your email and company and I'll send you a short video walkthrough.</p>
-      <form id="lead-form">
-        <label class="sr-only" for="lead-email">Email</label>
-        <input type="email" id="lead-email" placeholder="Email" required>
-        <label class="sr-only" for="lead-company">Company</label>
-        <input type="text" id="lead-company" placeholder="Company" required>
-        <button type="submit">Send me the video</button>
-      </form>
-      <p id="lead-confirmation" role="status" hidden>Thanks — check your inbox soon.</p>
+    <div id="lead-dialog" role="dialog" aria-modal="true" aria-labelledby="lead-title" hidden>
+      <div class="lead-card">
+        <button id="lead-close" type="button" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <h2 id="lead-title">Want more information?</h2>
+        <p class="lead-intro">Leave your email and company, and I'll send you a short video walkthrough of how this site was built.</p>
+        <form id="lead-form">
+          <label for="lead-email">Email</label>
+          <input type="email" id="lead-email" autocomplete="email" required>
+          <label for="lead-company">Company</label>
+          <input type="text" id="lead-company" autocomplete="organization" required>
+          <button type="submit">Send me the video</button>
+        </form>
+        <p id="lead-confirmation" role="status" hidden>Thanks. The walkthrough is on its way to your inbox.</p>
+      </div>
     </div>
   </div>
 

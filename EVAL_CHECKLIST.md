@@ -71,23 +71,29 @@ this is now the ONLY thing curate-timeline actually decides.
 ## Timeline interaction checks (after any change to timeline.js or style.css)
 Open the live site with `?debug=true` and run through these once on a
 desktop browser and once on a phone:
+- The welcome card accepts a description OR just a link; after "Get started"
+  the copy changes to "Message received!..." and the loading stages tick by.
 - Wheel/trackpad scrolling DOWN moves the timeline RIGHT; arrow keys,
   Page Up/Down, Home/End, and the ‹ › buttons all move through time.
-- Each role's card stays pinned at the playhead for its whole period,
-  then gets bumped out by the next one. The date chip tracks the date.
-- Overlapping roles (e.g. the campaign inside SAP Concur) show side by
-  side on desktop and stacked on a phone — never painted over each other.
-- Skills pop into the dock when a role is reached, upgrade (×2) on
-  repeats, and retract when scrolling back past that role.
-- Points stay as dots until the playhead reaches them, then their card
-  drops down on a leader line. No date is shown on a Point card.
-- Degrees sit on the line as stations; clicking one opens its card.
-- Opening any card dims everything else; scrolling past its period (or
-  pressing Escape) closes it. Wheeling over a long expanded card scrolls
-  the card, not the timeline.
-- Reaching the end opens the full-screen resume; Back (or Escape)
-  returns to the current role; clicking your name in the top-left
-  returns to the welcome screen, where "Match to a New Role" appears.
+- Each role's card stays pinned at the playhead for its period, then the
+  next role bumps it out. Concurrent roles (the campaign) stay docked beside
+  the main card for their WHOLE period. The current role stays pinned to Today.
+- Education shows a "started" label, a dashed study line below the axis,
+  and a graduation station (UVM ends open, with no degree) — no false gaps.
+- Points fade in a little BEFORE the playhead reaches them and out a little
+  after; no date is shown on a Point card.
+- Skills enter the ledger as roles are reached and upgrade Professional →
+  Advanced → Expert on repeats (gold pips at Expert); scrolling back
+  retracts them. The ledger never shows a scrollbar; "See all" lists every
+  skill by tier and locks the timeline while open.
+- Opening a card makes it wider and taller (growing down over the receded
+  timeline) and LOCKS the timeline: the wheel scrolls only the card, and
+  Escape closes it.
+- Reaching the end centers "Your tailored resume" for a moment, then the
+  resume opens. After 7 seconds an email popup appears; closing it leaves a
+  "Want more information?" button under the resume.
+- Back (or Escape) returns to the current role; clicking your name in the
+  top-left returns to the welcome card, where "Match to a new role" appears.
 
 ## Resume structure checks (after any change to compile/finalize-resume.js or data.js)
 Compare the compiled resume against the RESUME - BASE template:

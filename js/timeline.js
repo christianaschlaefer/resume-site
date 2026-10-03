@@ -19,12 +19,12 @@
 //     the playhead for the whole period, then lets the next card bump
 //     it out. No per-frame positioning math, so it never lags behind
 //     the scroll.
-//   • Education with only a graduation year is a "station" sitting ON
-//     the line (part of the core journey). Education with a start date
-//     renders as a full period, exactly like an Experience.
-//   • Points branch off BELOW the line on leader lines and appear only
-//     once the playhead reaches them — explorable extras, visually
-//     separate from the central professional thread.
+//   • Education is part of the core journey: a "started" node, a study
+//     line just below the axis, and a graduation station sitting ON the
+//     line — so time in school never reads as a gap.
+//   • Points hang BELOW the line on leader lines, fading in just before
+//     the playhead reaches them and out a little after — explorable
+//     extras, visually separate from the central professional thread.
 //
 // EVENTS DISPATCHED (on document)
 //   timeline:zonechange    { zone: "landing" | "timeline" | "outro" }
@@ -44,11 +44,13 @@ const Timeline = (() => {
   // Resumes routinely list "... – Jun 2021" followed by "Jun 2021 – ...".
   // A one-month overlap like that is a hand-off, not two concurrent jobs.
   const SAME_MONTH_TOLERANCE = 1;
-  // Points reveal just as the playhead reaches them.
-  const REVEAL_LEAD_PX = 8;
+  // The outro counts as "reached" once it's essentially filling the screen,
+  // so "Your tailored resume" is actually seen before the resume opens.
+  const OUTRO_ENTER_PX = 16;
   // Accent colors assigned to periods in chronological order. Any entry
   // can override its color with an optional `color` field in data.js.
-  const PALETTE = ["#2F6FDE", "#0F9D8A", "#D07A1F", "#7B57D1", "#D14D6A", "#3C8F47", "#2A8BB8", "#B07A16"];
+  // Stationery inks: the painted edge of each period's card.
+  const PALETTE = ["#2E4A7D", "#8E2C3A", "#2F5D50", "#B5862E", "#5E3A62", "#2C6E72", "#A0522D", "#556270"];
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const CHEVRON = `<svg class="toggle-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const CAP_ICON = `<svg class="station-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 1.5 9 12 14l8.5-4.05V16H22V9L12 4Z" fill="currentColor"/><path d="M5.5 11.6V15c0 1.7 2.9 3.5 6.5 3.5s6.5-1.8 6.5-3.5v-3.4L12 14.7l-6.5-3.1Z" fill="currentColor" opacity=".55"/></svg>`;
@@ -68,6 +70,11 @@ const Timeline = (() => {
   let relayoutTimer = null;
   let announceTimer = null;
   const announcements = new Map();
+  // While anything is open over the timeline (an expanded card, the skills
+  // sheet), the timeline itself is locked in place.
+  const lockReasons = new Set();
+  let lockedScrollLeft = 0;
+  let lastPastEnd = null;
   const smooth = { target: null, raf: 0 };
 
   // ---------- Small helpers ----------
@@ -153,22 +160,31 @@ const Timeline = (() => {
       }
     });
 
+    // Education: a "started" node and a study line below the axis, ending
+    // at the graduation station (or an open end, for no degree). Without a
+    // start date, a degree is just its graduation station, as before.
+    const eduLines = [];
     (sources.education || []).forEach((entry) => {
+      const gradSource = entry.date || entry.end || (entry.year ? `${entry.year}-06` : null);
+      const gradIdx = gradSource ? monthIndex(gradSource) + 0.5 : null;
       if (entry.start) {
         const startIdx = monthIndex(entry.start);
-        const endIdx = monthIndex(entry.end || `${entry.year}-06`) + 1;
-        journey.push({
-          id: entry.id, kind: "education", entry, startIdx,
-          endIdx: Math.max(endIdx, startIdx + 1), present: false,
-          // Education overlapping a job yields the main lane to the job.
-          concurrent: entry.concurrent === undefined ? true : Boolean(entry.concurrent)
-        });
-      } else if (entry.year || entry.date) {
-        stations.push({
-          id: entry.id, kind: "station", entry,
-          idx: monthIndex(entry.date || `${entry.year}-06`) + 0.5
-        });
+        const endIdx = Math.max(gradIdx !== null ? gradIdx : startIdx + 1, startIdx + 1);
+        eduLines.push({ id: `${entry.id}--start`, kind: "edu-start", entry, startIdx, endIdx, noDegree: Boolean(entry.noDegree) });
+        if (!entry.noDegree && gradIdx !== null) {
+          stations.push({ id: entry.id, kind: "station", entry, idx: endIdx, hasLine: true });
+        }
+      } else if (gradIdx !== null) {
+        stations.push({ id: entry.id, kind: "station", entry, idx: gradIdx, hasLine: false });
       }
+    });
+    // Overlapping study lines stack downward, one row each.
+    const eduRows = [];
+    [...eduLines].sort((a, b) => a.startIdx - b.startIdx).forEach((line) => {
+      let row = eduRows.findIndex((end) => line.startIdx >= end);
+      if (row === -1) { row = eduRows.length; eduRows.push(0); }
+      eduRows[row] = line.endIdx;
+      line.eduLane = row;
     });
 
     const laneCount = assignLanes(journey);
@@ -183,6 +199,7 @@ const Timeline = (() => {
 
     const marks = [];
     journey.forEach((j) => marks.push(j.startIdx, j.effEndIdx));
+    eduLines.forEach((l) => marks.push(l.startIdx, l.endIdx));
     points.forEach((p) => marks.push(p.idx));
     stations.forEach((s) => marks.push(s.idx));
     const startIdx = marks.length ? Math.floor(Math.min(...marks)) : now - 12;
@@ -191,8 +208,8 @@ const Timeline = (() => {
     const endIdx = Math.max(now + 1, marks.length ? Math.ceil(Math.max(...marks)) : now + 1);
 
     const byId = new Map();
-    [...journey, ...stations, ...points].forEach((item) => byId.set(item.id, item));
-    return { journey, stations, points, laneCount, startIdx, endIdx, nowIdx: now, byId };
+    [...journey, ...stations, ...points, ...eduLines].forEach((item) => byId.set(item.id, item));
+    return { journey, stations, points, eduLines, laneCount, startIdx, endIdx, nowIdx: now, byId };
   }
 
   // Overlapping periods can't share a row of sticky cards, so each
@@ -247,6 +264,7 @@ const Timeline = (() => {
     const ppm = m.pxPerMonth;
     const breakpoints = new Set([mdl.startIdx, mdl.endIdx]);
     mdl.journey.forEach((j) => { breakpoints.add(j.startIdx); breakpoints.add(j.effEndIdx); });
+    mdl.eduLines.forEach((l) => { breakpoints.add(l.startIdx); breakpoints.add(l.endIdx); });
     mdl.points.forEach((p) => breakpoints.add(p.idx));
     mdl.stations.forEach((s) => breakpoints.add(s.idx));
     const bps = [...breakpoints]
@@ -260,7 +278,9 @@ const Timeline = (() => {
       segs.push({
         from, to,
         w: (to - from) * ppm,
-        covered: mdl.journey.some((j) => j.startIdx < to && j.effEndIdx > from),
+        // Time in school is covered time too — never compressed as a "gap".
+        covered: mdl.journey.some((j) => j.startIdx < to && j.effEndIdx > from)
+          || mdl.eduLines.some((l) => l.startIdx < to && l.endIdx > from),
         compressed: false
       });
     }
@@ -350,18 +370,23 @@ const Timeline = (() => {
     return {
       vw, th, narrow, cardW, playheadX,
       pxPerMonth: narrow ? 30 : clamp(vw / 20, 40, 72),
-      // On a phone the playhead hugs the left edge, so a Point revealed
-      // exactly there would be born half off-screen. Narrow screens reveal
-      // Points mid-screen instead, with cards extending right of their dot.
-      revealLead: narrow ? Math.round(vw * 0.45) : REVEAL_LEAD_PX,
+      // Points fade in a little BEFORE the playhead reaches them (so you see
+      // them coming) and out a little after. On a phone the playhead hugs
+      // the left edge, so the lead is larger and cards extend right of
+      // their dot instead of centering on it.
+      revealLead: narrow ? Math.round(vw * 0.45) : Math.round(vw * 0.22),
+      revealTrail: narrow ? Math.round(vw * 0.1) : Math.round(vw * 0.14),
+      // An opened card gets wider where the screen allows, so long lists of
+      // achievements aren't squeezed into a narrow column.
+      cardWExpanded: narrow ? cardW : clamp(Math.round(cardW * 1.7), cardW, Math.max(cardW, Math.min(680, vw - playheadX - 40))),
       minItemW: cardW + Math.max(96, Math.round(cardW * 0.35)),
       leadIn: playheadX + (narrow ? 40 : 72),
       tail: Math.round(cardW * 0.5) + 56,
       laneGap: 16,
       pointCardW: narrow ? 200 : 232,
-      pointCardH: 96,
+      pointCardH: 104,
       tierGap: 12,
-      stemBase: 30,
+      stemBase: 46,
       axisGap: 46,
       laneTopMin: narrow ? 58 : 66,
       expandTop: narrow ? 58 : 60,
@@ -424,6 +449,7 @@ const Timeline = (() => {
     const vars = el.frame.style;
     vars.setProperty("--playhead-x", `${m.playheadX}px`);
     vars.setProperty("--card-w", `${m.cardW}px`);
+    vars.setProperty("--card-w-expanded", `${m.cardWExpanded}px`);
     vars.setProperty("--point-card-w", `${m.pointCardW}px`);
     vars.setProperty("--expand-top", `${m.expandTop}px`);
     vars.setProperty("--compact-h", `${m.compactH}px`);
@@ -473,11 +499,18 @@ const Timeline = (() => {
       j.dx = model.wideLanes ? j.lane * (m.cardW + m.laneGap) : 0;
       const localLeft = j.x0 - model.timelineLeft;
       // A sticky card must be fully pushed out by the time its wrapper
-      // ends — so an ongoing role, whose period ends at Today, would start
-      // sliding away a card-width BEFORE Today, right where the newest
-      // content lives. Its wrapper extends through the tail instead, so the
-      // current role stays pinned until the resume takes over.
-      j.stickEnd = j.x1 + (j.present ? m.cardW + m.tail : 0);
+      // ends, so it would start leaving a card-width BEFORE its period does.
+      // Two cases extend the wrapper so the card stays for the whole period:
+      //  • the ongoing role — pinned through Today until the resume opens;
+      //  • concurrent roles — docked beside the main card for their entire
+      //    span, then pushed out (as far as the next card in that lane allows).
+      // Main-lane roles keep the classic bump: the next role pushes them out.
+      const nextInLane = model.journey
+        .filter((o) => o !== j && o.lane === j.lane && o.startIdx >= j.effEndIdx)
+        .reduce((best, o) => (!best || o.startIdx < best.startIdx ? o : best), null);
+      const room = nextInLane ? model.timelineLeft + scale.toX(nextInLane.startIdx) - j.x1 : Infinity;
+      const extension = j.present ? m.cardW + m.tail : j.lane > 0 ? Math.max(0, Math.min(m.cardW, room)) : 0;
+      j.stickEnd = j.x1 + extension;
       j.wrapEl.style.left = `${localLeft + j.dx}px`;
       j.wrapEl.style.width = `${Math.max(m.cardW, j.stickEnd - j.x0)}px`;
       j.cardEl.style.left = `${m.playheadX + j.dx}px`;
@@ -505,6 +538,7 @@ const Timeline = (() => {
     el.axisLine.style.width = `${scale.spanEndX}px`;
     el.axisNow.style.left = `${scale.toX(model.endIdx)}px`;
     renderTicks(m, scale);
+    positionEducation(scale);
     positionStations(scale);
     positionPoints(m, v);
   }
@@ -563,12 +597,27 @@ const Timeline = (() => {
     });
   }
 
+  function positionEducation(scale) {
+    model.eduLines.forEach((l) => {
+      l.x0 = scale.toX(l.startIdx);
+      l.x1 = scale.toX(l.endIdx);
+      l.x = l.x0; // where its card opens
+      l.lineEl.style.left = `${l.x0}px`;
+      l.lineEl.style.width = `${Math.max(2, l.x1 - l.x0)}px`;
+      l.lineEl.style.setProperty("--edu-lane", l.eduLane);
+      l.el.style.left = `${l.x0}px`;
+      l.el.style.setProperty("--edu-lane", l.eduLane);
+    });
+  }
+
   function positionPoints(m, v) {
     model.points.forEach((p) => {
       const stem = m.stemBase + p.tier * (m.pointCardH + m.tierGap);
       p.el.style.left = `${p.x}px`;
       p.el.style.setProperty("--stem", `${stem}px`);
       p.el.style.setProperty("--card-offset", `${p.cardOffset}px`);
+      // The tag's punched hole sits exactly where its string (stem) meets it.
+      p.el.style.setProperty("--hole-x", `${-p.cardOffset}px`);
       p.el.style.setProperty("--point-max", `${Math.max(120, m.th - v.axisY - stem - 12)}px`);
     });
   }
@@ -579,52 +628,60 @@ const Timeline = (() => {
 
   function journeyCardHtml(j) {
     const e = j.entry;
-    const isEdu = j.kind === "education";
-    const title = isEdu ? e.degree : e.jobTitle;
-    const org = isEdu ? e.institution : e.employer;
-    const dates = e.dateText
-      ? e.dateText
-      : isEdu
-        ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}`
-        : `${formatDate(e.dates.start)} – ${formatDate(e.dates.end)}`;
-    const meta = [dates, e.location].filter(Boolean).join(" · ");
-    const items = (isEdu ? e.bullets : e.achievements) || [];
-    const eyebrow = isEdu ? "Education" : j.lane > 0 ? "Concurrent role" : j.present ? "Current role" : "Experience";
+    const dates = e.dateText || `${formatDate(e.dates.start)} – ${formatDate(e.dates.end)}`;
+    const items = e.achievements || [];
+    const eyebrow = j.lane > 0 ? "Concurrent role" : j.present ? "Current role" : "Experience";
     const id = attr(e.id);
     const listId = `card-list-${id}`;
-    const closedLabel = isEdu ? "View details" : "View achievements";
-    const openLabel = isEdu ? "Hide details" : "Hide achievements";
     return `
-      <article class="journey-card${isEdu ? " is-education" : ""}" data-entry-id="${id}" aria-labelledby="card-title-${id}">
+      <article class="journey-card" data-entry-id="${id}" aria-labelledby="card-title-${id}">
         <div class="card-head">
           <p class="card-eyebrow">${eyebrow}</p>
-          <h3 class="card-title" id="card-title-${id}">${title}</h3>
-          <p class="card-org">${org}</p>
-          <p class="card-meta">${meta}</p>
+          <h3 class="card-title" id="card-title-${id}">${e.jobTitle}</h3>
+          <p class="card-org">${e.employer}</p>
+          <p class="card-meta"><span class="card-dates">${dates}</span>${e.location ? `<span class="card-location">${e.location}</span>` : ""}</p>
         </div>
         <div class="card-body">
           ${e.overview ? `<p class="card-overview">${linkifyDetails(e.overview, e.details)}</p>` : ""}
           ${items.length ? `<ul class="card-list" id="${listId}" data-expand-region aria-hidden="true" inert>${items.map((a) => `<li>${linkifyDetails(a, e.details)}</li>`).join("")}</ul>` : ""}
         </div>
-        ${items.length ? `<button class="card-toggle" type="button" aria-expanded="false" aria-controls="${listId}" data-label-closed="${closedLabel}" data-label-open="${openLabel}"><span class="toggle-label">${closedLabel}</span>${CHEVRON}</button>` : ""}
+        ${items.length ? `<button class="card-toggle" type="button" aria-expanded="false" aria-controls="${listId}" data-label-closed="View achievements" data-label-open="Hide achievements"><span class="toggle-label">View achievements</span>${CHEVRON}</button>` : ""}
       </article>`;
+  }
+
+  // The education card, shared by a degree's graduation station and its
+  // "started" node, so either one opens the same details.
+  function educationCardHtml(e, cardId) {
+    const bullets = e.bullets || [];
+    const dates = e.start ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}` : (e.year || "");
+    return `
+      <div class="station-card" id="${cardId}" data-expand-region aria-hidden="true" inert>
+        <p class="card-eyebrow">Education</p>
+        <h3 class="station-title">${e.degree}</h3>
+        <p class="card-org">${e.institution}</p>
+        <p class="card-meta"><span class="card-dates">${dates}</span>${e.location ? `<span class="card-location">${e.location}</span>` : ""}</p>
+        ${e.note ? `<p class="station-note">${e.note}</p>` : ""}
+        ${bullets.length ? `<ul class="station-list">${bullets.map((b) => `<li>${linkifyDetails(b, e.details)}</li>`).join("")}</ul>` : ""}
+      </div>`;
+  }
+
+  function eduStartHtml(l) {
+    const e = l.entry;
+    const id = attr(e.id);
+    return `
+      <span class="edu-node" aria-hidden="true"></span>
+      <button class="edu-start-pill" type="button" aria-expanded="false" aria-controls="edu-card-${id}" title="${attr(`Started at ${e.institution}`)}">${e.institution}</button>
+      ${educationCardHtml(e, `edu-card-${id}`)}`;
   }
 
   function stationHtml(s) {
     const e = s.entry;
     const id = attr(e.id);
-    const bullets = e.bullets || [];
     return `
-      <button class="station-pill" type="button" aria-expanded="false" aria-controls="station-card-${id}" title="${attr(`${e.degree} — ${e.institution}`)}">
+      <button class="station-pill" type="button" aria-expanded="false" aria-controls="station-card-${id}" title="${attr(`${e.degree}, ${e.institution}`)}">
         ${CAP_ICON}<span class="station-label">${e.degree}</span><span class="station-year">${e.year || ""}</span>
       </button>
-      <div class="station-card" id="station-card-${id}" data-expand-region aria-hidden="true" inert>
-        <p class="card-eyebrow">Education</p>
-        <h3 class="station-title">${e.degree}</h3>
-        <p class="card-org">${e.institution}</p>
-        <p class="card-meta">${[e.location, e.year].filter(Boolean).join(" · ")}</p>
-        ${bullets.length ? `<ul class="station-list">${bullets.map((b) => `<li>${linkifyDetails(b, e.details)}</li>`).join("")}</ul>` : ""}
-      </div>`;
+      ${educationCardHtml(e, `station-card-${id}`)}`;
   }
 
   function pointHtml(p) {
@@ -665,6 +722,13 @@ const Timeline = (() => {
     el.axisNow = axis.querySelector(".axis-now");
     const segments = axis.querySelector(".axis-segments");
 
+    model.eduLines.forEach((l) => {
+      const line = document.createElement("div");
+      line.className = `edu-line${l.noDegree ? " is-open-ended" : ""}`;
+      segments.appendChild(line);
+      l.lineEl = line;
+    });
+
     model.journey.forEach((j) => {
       const seg = document.createElement("div");
       seg.className = [
@@ -683,6 +747,7 @@ const Timeline = (() => {
     // visitor scrolls through it, regardless of absolute positioning.
     const ordered = [
       ...model.journey.map((item) => ({ at: item.startIdx, item })),
+      ...model.eduLines.map((item) => ({ at: item.startIdx, item })),
       ...model.stations.map((item) => ({ at: item.idx, item })),
       ...model.points.map((item) => ({ at: item.idx, item }))
     ].sort((a, b) => a.at - b.at);
@@ -696,6 +761,13 @@ const Timeline = (() => {
         item.cardEl = wrap.firstElementChild;
         item.cardEl.style.setProperty("--accent", item.color);
         el.timeline.appendChild(wrap);
+      } else if (item.kind === "edu-start") {
+        const node = document.createElement("div");
+        node.className = `edu-start${item.noDegree ? " is-no-degree" : ""}`;
+        node.dataset.entryId = item.id;
+        node.innerHTML = eduStartHtml(item);
+        item.el = node;
+        el.timeline.appendChild(node);
       } else {
         const node = document.createElement("div");
         node.className = item.kind === "station" ? "station" : "point";
@@ -727,7 +799,7 @@ const Timeline = (() => {
 
     const nextZone = !model ? "landing"
       : playhead < model.timelineLeft ? "landing"
-        : playhead >= model.outroLeft ? "outro"
+        : scrollLeft >= model.outroLeft - OUTRO_ENTER_PX ? "outro"
           : "timeline";
     if (nextZone !== zone) {
       zone = nextZone;
@@ -740,7 +812,13 @@ const Timeline = (() => {
 
     // Progress bar + date chip
     const startScroll = model.timelineLeft + scale.spanStartX - m.playheadX;
-    const endScroll = model.outroLeft - m.playheadX;
+    const endScroll = model.outroLeft;
+    // Past Today the date chip has nothing left to point at.
+    const pastEnd = playhead > model.timelineLeft + scale.spanEndX + 24;
+    if (pastEnd !== lastPastEnd) {
+      lastPastEnd = pastEnd;
+      el.hud.classList.toggle("is-past-end", pastEnd);
+    }
     const progress = clamp((scrollLeft - startScroll) / Math.max(1, endScroll - startScroll), 0, 1);
     el.progress.style.transform = `scaleX(${progress.toFixed(4)})`;
     const idx = clamp(scale.toIdx(playhead - model.timelineLeft), model.startIdx, model.endIdx - 0.001);
@@ -762,21 +840,35 @@ const Timeline = (() => {
         if (playhead < j.x1) nextActive.push(j.id);
       }
     });
+    // Education counts as reached when studies START (that's when skills
+    // were being learned); a degree's station just marks graduation.
+    model.eduLines.forEach((l) => {
+      const started = playhead >= model.timelineLeft + l.x0;
+      if (started !== l.passed) {
+        l.passed = started;
+        l.el.classList.toggle("is-passed", started);
+      }
+      if (started) nextReached.push(l.entry.id);
+    });
     model.stations.forEach((s) => {
       const passed = playhead >= model.timelineLeft + s.x;
       if (passed !== s.passed) {
         s.passed = passed;
         s.el.classList.toggle("is-passed", passed);
       }
-      if (passed) nextReached.push(s.id);
+      if (passed && !s.hasLine) nextReached.push(s.id);
     });
+    // A Point is VISIBLE in a window around the playhead (fading in just
+    // before, out a little after), but its skills count once it's reached.
     model.points.forEach((p) => {
-      const revealed = playhead >= model.timelineLeft + p.x - m.revealLead;
-      if (revealed !== p.revealed) {
-        p.revealed = revealed;
-        p.el.classList.toggle("is-revealed", revealed);
+      const px = model.timelineLeft + p.x;
+      const isOpen = expanded && expanded.item === p;
+      const visible = isOpen || (playhead >= px - m.revealLead && playhead <= px + m.revealTrail);
+      if (visible !== p.revealed) {
+        p.revealed = visible;
+        p.el.classList.toggle("is-revealed", visible);
       }
-      if (revealed) nextReached.push(p.id);
+      if (playhead >= px) nextReached.push(p.id);
     });
     if (!sameList(nextActive, activeIds)) {
       activeIds = nextActive;
@@ -803,9 +895,11 @@ const Timeline = (() => {
         // Main-lane cards leave a faint "history" trail. A side-by-side
         // secondary card would slide into the main lane's column, so it
         // fades out completely instead.
+        // ...and past Today, even the main-lane trail fades out, so nothing
+        // ghosts behind "Your tailored resume".
         opacity = j.lane > 0 && model.wideLanes
           ? Math.max(0, 1 - (stick - left) / (m.cardW * 0.45))
-          : Math.max(0.2, 1 - ((stick - left) / m.cardW) * 0.8);
+          : Math.max(pastEnd ? 0 : 0.2, 1 - ((stick - left) / m.cardW) * 0.8);
       }
       opacity = Math.round(opacity * 100) / 100;
       if (opacity !== j.lastOpacity) {
@@ -831,7 +925,7 @@ const Timeline = (() => {
     }
 
     // An expanded Point or station closes once it scrolls out of view.
-    if (expanded && (expanded.item.kind === "point" || expanded.item.kind === "station")) {
+    if (expanded && (expanded.item.kind === "point" || expanded.item.kind === "station" || expanded.item.kind === "edu-start")) {
       const sx = model.timelineLeft + expanded.item.x - scrollLeft;
       if (sx < -60 || sx > m.vw + 60) collapse();
     }
@@ -882,9 +976,16 @@ const Timeline = (() => {
 
   function setExpandedUi(item, open) {
     const host = hostFor(item);
+    if (open && item.wrapEl && metrics) {
+      // Keep the card's top where it is and let it grow downward; lift it
+      // only as much as needed to leave ~560px of room when the screen has it.
+      const expandedWrapperH = metrics.th - metrics.expandTop - 14;
+      const lift = Math.min(item.cardEl.offsetTop, Math.max(0, expandedWrapperH - 560));
+      item.wrapEl.style.setProperty("--open-offset", `${Math.round(lift)}px`);
+    }
     host.classList.toggle("is-expanded", open);
     if (item.wrapEl) item.wrapEl.classList.toggle("is-expanded-host", open);
-    const toggle = host.querySelector(".card-toggle, .station-pill");
+    const toggle = host.querySelector(".card-toggle, .station-pill, .edu-start-pill");
     if (toggle) {
       toggle.setAttribute("aria-expanded", String(open));
       const label = toggle.querySelector(".toggle-label");
@@ -903,6 +1004,10 @@ const Timeline = (() => {
     }
     el.track.classList.toggle("has-expanded-card", open);
     el.frame.classList.toggle("has-expanded-card", open);
+    // While a card is open, the timeline behind it doesn't move — so the
+    // mouse wheel can never end up scrolling the dimmed timeline instead
+    // of the card you're reading.
+    if (open) lock("card"); else unlock("card");
     dispatch("card:expandchange", { id: item.id, kind: item.kind, expanded: open });
   }
 
@@ -923,7 +1028,7 @@ const Timeline = (() => {
 
   function onTrackClick(event) {
     if (!model) return;
-    const trigger = event.target.closest(".card-toggle, .station-pill");
+    const trigger = event.target.closest(".card-toggle, .station-pill, .edu-start-pill");
     if (!trigger || !el.track.contains(trigger)) return;
     const host = trigger.closest("[data-entry-id]");
     const item = host && model.byId.get(host.dataset.entryId);
@@ -948,6 +1053,42 @@ const Timeline = (() => {
   // ============================================================
 
   const maxScroll = () => Math.max(0, el.track.scrollWidth - el.track.clientWidth);
+
+  function lock(reason) {
+    if (!lockReasons.size) {
+      cancelSmooth();
+      pendingExpandId = null;
+      lockedScrollLeft = el.track.scrollLeft;
+      el.frame.classList.add("is-locked");
+    }
+    lockReasons.add(reason);
+  }
+
+  function unlock(reason) {
+    lockReasons.delete(reason);
+    if (!lockReasons.size) el.frame.classList.remove("is-locked");
+  }
+
+  const isLocked = () => lockReasons.size > 0;
+
+  // Last line of defense for the lock: anything that still manages to move
+  // the track (dragging the scrollbar, focus scrolling) is put back.
+  function onScroll() {
+    if (isLocked() && Math.abs(el.track.scrollLeft - lockedScrollLeft) > 1) {
+      el.track.scrollLeft = lockedScrollLeft;
+      return;
+    }
+    requestFrame();
+  }
+
+  // Touch: block panning the timeline while locked, except inside the open
+  // card (which only pans vertically, via touch-action in the CSS).
+  function onTouchMove(event) {
+    if (!isLocked()) return;
+    const host = expanded ? hostFor(expanded.item) : null;
+    if (host && host.contains(event.target)) return;
+    event.preventDefault();
+  }
 
   // A tiny easing engine: each frame moves a fixed fraction of the
   // remaining distance, so a mouse-wheel notch glides instead of
@@ -1026,6 +1167,13 @@ const Timeline = (() => {
   // to the browser, which already handles it natively and smoothly.
   function onWheel(event) {
     if (event.ctrlKey || !metrics) return; // ctrl+wheel = pinch-zoom; leave it alone
+    if (isLocked()) {
+      // Locked: the open card may scroll its own content; nothing else moves.
+      const host = expanded ? hostFor(expanded.item) : null;
+      if (host && host.contains(event.target) && canScrollInside(event.target, event.deltaY)) return;
+      event.preventDefault();
+      return;
+    }
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
       cancelSmooth();
       return;
@@ -1052,6 +1200,15 @@ const Timeline = (() => {
       return;
     }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+    const navKeys = ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"];
+    if (isLocked()) {
+      // Up/Down may still scroll inside the open card; nothing moves the timeline.
+      const host = expanded ? hostFor(expanded.item) : null;
+      const insideCard = host && host.contains(t) && (event.key === "ArrowUp" || event.key === "ArrowDown");
+      if (navKeys.includes(event.key) && !insideCard) event.preventDefault();
+      return;
+    }
 
     const step = metrics.vw * 0.18;
     switch (event.key) {
@@ -1086,6 +1243,7 @@ const Timeline = (() => {
   function chapterStops() {
     if (!model) return [];
     const stops = model.journey.map((j) => j.x0)
+      .concat(model.eduLines.map((l) => model.timelineLeft + l.x0))
       .concat(model.stations.map((s) => model.timelineLeft + s.x));
     return [...new Set(stops.map((x) => Math.round(x)))].sort((a, b) => a - b);
   }
@@ -1097,13 +1255,16 @@ const Timeline = (() => {
 
   function goNext() {
     if (!model) return;
+    collapse(); // an explicit navigation closes an open card first
     const playhead = currentPlayhead();
     const stop = chapterStops().find((x) => x > playhead + 6);
-    scrollPlayheadTo(stop !== undefined ? stop + 2 : model.outroLeft + 2);
+    if (stop !== undefined) scrollPlayheadTo(stop + 2);
+    else smoothScrollTo(maxScroll()); // the outro, filling the screen
   }
 
   function goPrev() {
     if (!model) return;
+    collapse();
     const playhead = currentPlayhead();
     const stops = chapterStops().filter((x) => x < playhead - 24);
     if (stops.length) scrollPlayheadTo(stops[stops.length - 1] + 2);
@@ -1118,7 +1279,7 @@ const Timeline = (() => {
     if (!model || !model.scale || !metrics) return { type: "scroll", value: el.track.scrollLeft };
     const playhead = el.track.scrollLeft + metrics.playheadX;
     if (playhead < model.timelineLeft) return { type: "landing", ratio: el.track.scrollLeft / Math.max(1, metrics.vw) };
-    if (playhead >= model.outroLeft) return { type: "outro" };
+    if (el.track.scrollLeft >= model.outroLeft - OUTRO_ENTER_PX) return { type: "outro" };
     return { type: "date", idx: model.scale.toIdx(playhead - model.timelineLeft) };
   }
 
@@ -1128,7 +1289,7 @@ const Timeline = (() => {
       return;
     }
     if (anchor.type === "landing") el.track.scrollLeft = anchor.ratio * metrics.vw;
-    else if (anchor.type === "outro") el.track.scrollLeft = model.outroLeft - metrics.playheadX + 2;
+    else if (anchor.type === "outro") el.track.scrollLeft = model.outroLeft;
     else if (anchor.type === "date") el.track.scrollLeft = model.timelineLeft + model.scale.toX(anchor.idx) - metrics.playheadX;
     else el.track.scrollLeft = anchor.value;
   }
@@ -1140,6 +1301,7 @@ const Timeline = (() => {
       cancelSmooth();
       layout();
       restoreAnchor(anchor);
+      lockedScrollLeft = el.track.scrollLeft; // keep a lock anchored to the new layout
       update();
     }, 120);
   }
@@ -1178,7 +1340,8 @@ const Timeline = (() => {
     reducedMotion = motion.matches;
     if (motion.addEventListener) motion.addEventListener("change", (e) => { reducedMotion = e.matches; });
 
-    el.track.addEventListener("scroll", requestFrame, { passive: true });
+    el.track.addEventListener("scroll", onScroll, { passive: true });
+    el.track.addEventListener("touchmove", onTouchMove, { passive: false });
     el.track.addEventListener("wheel", onWheel, { passive: false });
     el.track.addEventListener("pointerdown", onUserGrab, { passive: true });
     el.track.addEventListener("touchstart", onUserGrab, { passive: true });
@@ -1191,6 +1354,9 @@ const Timeline = (() => {
 
     layout();
     update();
+    // Web fonts change text widths (station pills, card heights) once they
+    // arrive, so lay out again when they're ready.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleRelayout);
   }
 
   function renderCurated(curation) {
@@ -1219,17 +1385,26 @@ const Timeline = (() => {
       if (model && model.scale) scrollPlayheadTo(model.timelineLeft + model.scale.toX(model.endIdx - 0.5));
     },
     scrollToOutro() {
-      if (model) scrollPlayheadTo(model.outroLeft + 2);
+      if (model) smoothScrollTo(maxScroll());
     },
     scrollToLanding() {
       smoothScrollTo(0);
     },
     collapse,
     announce,
+    lock,
+    unlock,
+    isLocked,
     getZone: () => zone,
     getActiveIds: () => [...activeIds],
     getExpandedId: () => (expanded ? expanded.item.id : null),
     getPlayheadLabel: () => lastChipLabel,
+    // Test/debug hook: put the playhead on a given month ("YYYY-MM"), instantly.
+    _jumpToMonth(ym) {
+      if (!model || !model.scale || isLocked()) return;
+      el.track.scrollLeft = model.timelineLeft + model.scale.toX(monthIndex(ym) + 0.5) - metrics.playheadX;
+      update();
+    },
     // Pure functions exposed for testing outside the browser.
     _internals: { buildModel, buildScale, assignLanes, deriveMetrics, assignPointTiers, monthIndex }
   };

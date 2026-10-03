@@ -1,43 +1,48 @@
 /* ============================================================
-   BASE
+   DESIGN TOKENS — "correspondence stationery"
+   A cool, pale writing-paper desk; bright white card stock whose painted
+   edge is each period's ink; an engraved serif for names and titles; a
+   blind-embossed monogram and a wax seal bookending the experience.
    ============================================================ */
 
 :root {
-  --ink: #1f2328;
-  --ink-soft: #3a3f47;
-  --muted: #5f6672;
-  --faint: #8d939c;
-  --bg: #f6f5f1;
-  --surface: #ffffff;
-  --line: #e3e0d8;
-  --line-strong: #cbc6bb;
-  --track: #e2dfd7;
-  --chip: #f0eee8;
-  --chip-hover: #e7e4dc;
-  --focus: #2f6fde;
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --desk: #e4eaec;
+  --desk-shade: #d3dce0;
+  --card: #ffffff;
+  --ink: #1d2b3a;
+  --ink-2: #3b4a5a;
+  --muted: #5e6a77;
+  --faint: #6f7a86;
+  --rule: #c3cdd3;
+  --hair: #dde3e6;
+  --foil: #a88746;
+  --foil-light: #d4bb7e;
+  --seal: #7e2633;
+  --edu: #5f5687;
+  --focus: #2e5c9a;
+  --font-display: "Marcellus", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-ui: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-doc: "Crimson Pro", Georgia, "Times New Roman", serif;
+  --paper-shadow: 0 1px 0 rgba(29, 43, 58, 0.04), 0 14px 30px -20px rgba(29, 43, 58, 0.38);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.11 0 0 0 0 0.17 0 0 0 0 0.23 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* The page itself never scrolls — all movement is horizontal, inside
-   #track. (The print rules below undo this so the resume paginates.) */
+   #track. (The print rules undo this so the resume paginates.) */
 html,
 body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--desk) var(--grain);
 }
 
-/* The `hidden` attribute must always win. Without this, any element
-   that also gets a `display` value from this stylesheet (flex panels,
-   the lead form) silently ignores `hidden` — author CSS beats the
-   browser's built-in [hidden] rule. */
+/* The `hidden` attribute must always win, even over elements that get a
+   `display` value from this stylesheet. */
 [hidden] {
   display: none !important;
 }
 
-/* Visually hidden but still reachable by screen readers. NOT the same
-   as display:none, which would hide it from assistive tech too. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -50,9 +55,6 @@ body {
   border: 0;
 }
 
-/* Respects the OS-level "reduce motion" setting. Overrides every
-   transition/animation at once (timeline.js separately turns the
-   smooth-scroll glide into instant jumps). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -72,7 +74,7 @@ body {
 #stage {
   position: relative;
   height: 100vh;
-  height: 100dvh; /* tracks mobile browser toolbars showing/hiding */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   font-family: var(--font-ui);
@@ -80,13 +82,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#stage button {
-  font-family: inherit;
+#stage button,
+#resume-overlay button {
+  font-family: var(--font-ui);
 }
 
-#stage button:focus-visible,
-#stage textarea:focus-visible,
-.detail-anchor:focus-visible {
+#stage :focus-visible,
+#resume-overlay :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -102,15 +104,14 @@ body {
   inset: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  /* Stops a hard swipe at the left edge from triggering the browser's
-     "back" navigation gesture on trackpads. */
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-color: var(--rule) transparent;
   outline: none;
 }
 
 #track:focus-visible {
+  outline: none;
   box-shadow: inset 0 0 0 2px var(--focus);
 }
 
@@ -119,7 +120,7 @@ body {
 }
 
 #track::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: var(--rule);
   border-radius: 4px;
 }
 
@@ -129,7 +130,77 @@ body {
 }
 
 /* ============================================================
-   LANDING (welcome / job intake) & OUTRO
+   MONOGRAM & SEAL
+   ============================================================ */
+
+.monogram {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Blind embossing: no ink, just paper pressed up from behind. */
+.monogram-emboss {
+  width: 78px;
+  height: 78px;
+  font-size: 29px;
+  color: #f1f3f2;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f4f6f5 60%, #eef1f0 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -2px 3px rgba(29, 43, 58, 0.07),
+    0 1px 1px rgba(29, 43, 58, 0.08),
+    0 -1px 0 rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 1), 0 -1px 1px rgba(29, 43, 58, 0.16);
+  position: relative;
+}
+
+.monogram-emboss::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(29, 43, 58, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.monogram-seal {
+  width: 34px;
+  height: 34px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 2px var(--card), inset 0 0 0 3px var(--rule);
+}
+
+.wax-seal {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 47% 53% 50% 50% / 52% 48% 52% 48%;
+  background: radial-gradient(circle at 34% 30%, #b04656 0%, #8c2c3b 42%, #6a1d29 100%);
+  box-shadow:
+    inset 0 0 0 7px rgba(0, 0, 0, 0.08),
+    inset 0 2px 3px rgba(255, 255, 255, 0.22),
+    0 2px 0 rgba(90, 20, 30, 0.35),
+    0 12px 22px -12px rgba(90, 20, 30, 0.6);
+}
+
+.wax-seal span {
+  font-family: var(--font-display);
+  font-size: 27px;
+  letter-spacing: 0.04em;
+  color: #c86070;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* ============================================================
+   LANDING — a correspondence card on the desk
    ============================================================ */
 
 .landing-panel,
@@ -149,81 +220,114 @@ body {
   overflow-y: auto;
 }
 
-.landing-inner {
+.landing-card {
   width: 100%;
-  max-width: 580px;
+  max-width: 600px;
   margin: auto 0;
+  box-sizing: border-box;
+  padding: 48px 56px 44px;
+  background: var(--card);
+  border: 1.5px solid var(--ink); /* the painted edge */
+  border-radius: 4px;
+  box-shadow: var(--paper-shadow), 0 30px 60px -40px rgba(29, 43, 58, 0.35);
 }
 
-.landing-eyebrow {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
+.landing-card .monogram-emboss {
+  margin-bottom: 26px;
 }
 
-.landing-panel h1 {
+.landing-card h1 {
   margin: 0;
-  font-size: clamp(34px, 5.2vw, 52px);
-  line-height: 1.05;
-  letter-spacing: -0.025em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(36px, 5.4vw, 52px);
+  line-height: 1.04;
+  letter-spacing: 0.005em;
 }
 
 .landing-title {
-  margin: 10px 0 24px;
-  font-size: 18px;
+  margin: 12px 0 0;
+  font-size: 17px;
   color: var(--muted);
 }
 
+/* A short foil rule under the letterhead. */
+.landing-title::after {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 2px;
+  margin: 22px 0 22px;
+  background: linear-gradient(90deg, var(--foil), var(--foil-light), var(--foil));
+}
+
 .landing-intro {
-  margin: 0 0 18px;
-  font-size: 16px;
-  line-height: 1.55;
-  color: var(--ink-soft);
+  margin: 0 0 20px;
+  max-width: 52ch;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-2);
 }
 
 #job-intake-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
+/* Ruled writing paper: the lines scroll with the text. */
 #job-intake-form textarea {
-  min-height: 128px;
-  padding: 14px 16px;
+  min-height: 132px;
+  padding: 4px 14px;
   font: inherit;
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 32px;
   color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  background-color: var(--card);
+  background-image: repeating-linear-gradient(transparent 0, transparent 31px, var(--hair) 31px, var(--hair) 32px);
+  background-attachment: local;
+  background-position: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
   resize: vertical;
+}
+
+#job-intake-form textarea::placeholder {
+  color: #8a949e;
 }
 
 .intake-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 14px;
 }
 
-#intake-submit {
-  padding: 12px 24px;
+#intake-submit,
+#match-new-role,
+#skill-panel-open,
+#download-resume,
+#lead-form button[type="submit"] {
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+#intake-submit,
+#download-resume,
+#lead-form button[type="submit"] {
+  padding: 13px 26px;
   color: #fff;
   background: var(--ink);
   border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.2s ease;
 }
 
-#intake-submit:hover:not(:disabled) {
-  transform: translateY(-1px);
+#intake-submit:hover:not(:disabled),
+#download-resume:hover,
+#lead-form button[type="submit"]:hover {
+  background: var(--ink-2);
 }
 
 #intake-submit:disabled {
@@ -231,10 +335,87 @@ body {
   cursor: progress;
 }
 
-#intake-status {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
+/* Loading stages: an index of little tasks, ticked off in turn. */
+.loading-stages {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 11px;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15.5px;
+  color: var(--ink-2);
+  transition: opacity 0.3s ease, color 0.3s ease;
+}
+
+.stage[data-state="waiting"] {
+  opacity: 0.4;
+}
+
+.stage-mark {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.stage[data-state="active"] .stage-mark {
+  border-color: var(--ink);
+}
+
+.stage[data-state="active"] .stage-mark::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 1px;
+  background: var(--foil);
+  animation: stage-pulse 1.1s ease-in-out infinite;
+}
+
+.stage[data-state="active"] .stage-text::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: stage-dots 1.4s steps(4, end) infinite;
+}
+
+.stage[data-state="done"] .stage-mark {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.stage[data-state="done"] .stage-mark::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg);
+}
+
+@keyframes stage-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@keyframes stage-dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75%, 100% { content: "..."; }
 }
 
 .landing-hint {
@@ -243,44 +424,64 @@ body {
   color: var(--muted);
 }
 
+#match-new-role,
+#skill-panel-open {
+  padding: 10px 18px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--ink);
+}
+
 #match-new-role {
   margin-top: 18px;
-  padding: 9px 18px;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  cursor: pointer;
 }
+
+#match-new-role:hover,
+#skill-panel-open:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* ============================================================
+   OUTRO — the sealed envelope
+   ============================================================ */
 
 .outro-panel {
   text-align: center;
 }
 
 .outro-inner h2 {
-  margin: 0 0 8px;
-  font-size: clamp(26px, 3.6vw, 36px);
-  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(30px, 4vw, 40px);
 }
 
-.outro-inner p:last-child {
+.outro-status {
   margin: 0;
+  font-size: 16px;
   color: var(--muted);
+}
+
+.outro-status.is-pending::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: stage-dots 1.4s steps(4, end) infinite;
 }
 
 /* ============================================================
    TIMELINE LAYER
-   All absolute positions below are set by js/timeline.js; the CSS
-   variables (--axis-y, --lane-bottom, etc.) are written onto
-   #track-frame on every layout.
+   Positions come from js/timeline.js; the CSS variables (--axis-y,
+   --lane-bottom, ...) are written onto #track-frame on every layout.
    ============================================================ */
 
 .timeline-layer {
   position: absolute;
   top: 0;
   height: 100%;
-  pointer-events: none; /* children opt back in where interactive */
+  pointer-events: none;
 }
 
 /* ---------- Central axis ---------- */
@@ -299,37 +500,29 @@ body {
 .axis-line {
   position: absolute;
   left: 0;
-  top: -3px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--track);
+  top: -1px;
+  height: 2px;
+  background: var(--rule);
   -webkit-mask-image: linear-gradient(to right, transparent, #000 180px);
   mask-image: linear-gradient(to right, transparent, #000 180px);
 }
 
-/* One colored segment per period: the main lane sits on the line;
-   concurrent lanes are thinner bars stacked just above it. */
+/* Each period is a stroke of its own ink along the line. */
 .axis-seg {
   position: absolute;
-  top: -4px;
-  height: 8px;
-  border-radius: 4px;
+  top: -3px;
+  height: 6px;
+  border-radius: 3px;
   background: var(--accent);
 }
 
 .axis-seg.is-secondary {
-  top: calc(-14px - (var(--lane, 1) - 1) * 7px);
-  height: 4px;
+  top: calc(-11px - (var(--lane, 1) - 1) * 6px);
+  height: 3px;
   border-radius: 2px;
   opacity: 0.85;
 }
 
-.axis-seg.is-education {
-  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0 4px, transparent 4px 8px);
-  background-color: var(--accent);
-}
-
-/* The current role's segment ends in a gently pulsing "live" cap. */
 .axis-seg.is-present::after {
   content: "";
   position: absolute;
@@ -340,13 +533,35 @@ body {
   margin-top: -5px;
   border-radius: 50%;
   background: var(--accent);
-  animation: live-pulse 2.4s ease-out infinite;
+  animation: live-pulse 2.6s ease-out infinite;
 }
 
 @keyframes live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0.25); }
-  70% { box-shadow: 0 0 0 9px rgba(31, 35, 40, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(29, 43, 58, 0.25); }
+  70% { box-shadow: 0 0 0 9px rgba(29, 43, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(29, 43, 58, 0); }
+}
+
+/* Time in school: a dashed study line just under the axis. */
+.edu-line {
+  position: absolute;
+  top: calc(9px + var(--edu-lane, 0) * 7px);
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--edu) 0 7px, transparent 7px 11px);
+  opacity: 0.75;
+}
+
+.edu-line.is-open-ended::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: -3px;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--edu);
+  background: var(--desk);
 }
 
 .axis-ticks {
@@ -358,24 +573,25 @@ body {
 
 .axis-tick {
   position: absolute;
-  top: 7px;
+  top: 13px;
   width: 1px;
   height: 4px;
-  background: var(--line-strong);
+  background: var(--rule);
 }
 
 .axis-tick.is-major {
+  top: 12px;
   height: 8px;
   background: var(--faint);
 }
 
 .axis-label {
   position: absolute;
-  top: 18px;
+  top: 31px;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--faint);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -385,14 +601,13 @@ body {
   transform: none;
 }
 
-/* A compressed gap: two slanted strokes cutting through the line. */
 .axis-break {
   position: absolute;
-  top: -9px;
+  top: -8px;
   width: 7px;
-  height: 18px;
+  height: 16px;
   margin-left: -3.5px;
-  background: var(--bg);
+  background: var(--desk);
   border-left: 1.5px solid var(--faint);
   border-right: 1.5px solid var(--faint);
   transform: skewX(-20deg);
@@ -411,28 +626,21 @@ body {
   height: 12px;
   box-sizing: border-box;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--card);
   border: 2px solid var(--ink);
 }
 
 .axis-now-label {
   position: absolute;
-  top: 18px;
+  top: 31px;
   transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 13px;
   color: var(--ink);
 }
 
-/* ---------- Period cards (Experiences & dated Education) ---------- */
+/* ---------- Period cards: edge-painted card stock ---------- */
 
-/* The wrapper is exactly as wide as the period. The card inside is
-   position: sticky, so the browser keeps it at the playhead for the
-   whole period, then the wrapper's right edge pushes it out — the
-   "bump" to the next chapter. Bottom-anchored so cards sit just above
-   the axis and expand UPWARD, keeping the line visible. */
 .journey-item {
   position: absolute;
   top: var(--expand-top);
@@ -454,8 +662,19 @@ body {
   z-index: 3;
 }
 
+/* Opened: the card keeps its top edge and may grow down over the axis
+   (everything there is receded and locked anyway), lifting slightly only
+   when it needs more room — see setExpandedUi in timeline.js. */
 .journey-item.is-expanded-host {
   z-index: 30;
+  height: calc(var(--track-h) - var(--expand-top) - 14px);
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.journey-item.is-expanded-host .journey-card.is-expanded {
+  margin-top: var(--open-offset, 0px);
+  max-height: calc(var(--track-h) - var(--expand-top) - 14px - var(--open-offset, 0px));
 }
 
 .journey-card {
@@ -465,19 +684,14 @@ body {
   max-height: var(--lane-h);
   display: flex;
   flex-direction: column;
-  padding: 16px 18px 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow:
-    inset 0 3px 0 var(--accent),
-    0 1px 2px rgba(20, 22, 26, 0.05),
-    0 10px 28px -16px rgba(20, 22, 26, 0.25);
+  padding: 18px 20px 14px;
+  background: var(--card);
+  border: 2px solid var(--accent); /* the painted edge, in this period's ink */
+  border-radius: 3px;
+  box-shadow: var(--paper-shadow);
   pointer-events: auto;
-  /* --scroll-opacity comes from timeline.js (approaching/leaving the
-     playhead); --dim from focus mode. They multiply. */
   opacity: calc(var(--scroll-opacity, 1) * var(--dim, 1));
-  transition: opacity 0.15s linear, box-shadow 0.3s ease;
+  transition: opacity 0.15s linear, box-shadow 0.3s ease, width 0.3s ease, margin-top 0.3s ease;
 }
 
 .journey-card.is-gone {
@@ -485,18 +699,19 @@ body {
 }
 
 .journey-card.is-active {
-  box-shadow:
-    inset 0 3px 0 var(--accent),
-    0 1px 2px rgba(20, 22, 26, 0.06),
-    0 18px 40px -20px rgba(20, 22, 26, 0.4);
+  box-shadow: 0 1px 0 rgba(29, 43, 58, 0.05), 0 22px 40px -22px rgba(29, 43, 58, 0.5);
 }
 
 .journey-card.is-sharing {
   max-height: var(--card-max-shared, var(--lane-h));
 }
 
+/* Opened: taller AND wider (where the screen allows), so a long list of
+   achievements isn't squeezed into a narrow column. */
 .journey-card.is-expanded {
+  width: var(--card-w-expanded, var(--card-w));
   max-height: calc(var(--lane-bottom) - var(--expand-top));
+  touch-action: pan-y;
 }
 
 .card-head {
@@ -505,66 +720,68 @@ body {
 
 .card-eyebrow {
   margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--accent, var(--muted));
 }
 
 .card-title {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.25;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 21px;
+  line-height: 1.2;
 }
 
 .card-org {
-  margin: 3px 0 0;
-  font-size: 14px;
+  margin: 4px 0 0;
+  font-size: 14.5px;
   font-weight: 600;
-  color: var(--ink-soft);
+  color: var(--ink-2);
 }
 
 .card-meta {
   margin: 4px 0 0;
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--muted);
 }
 
-/* The body is the card's own scroll area: if expanded content is
-   taller than the space available, it scrolls inside the card (and the
-   mouse wheel scrolls it there instead of moving the timeline). */
-.card-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin-top: 10px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+.card-dates {
+  font-variant-numeric: tabular-nums;
 }
 
-/* Scroll shadows: a soft shadow appears at the top or bottom edge only
-   when there's more content to scroll in that direction. The "local"
-   gradients scroll with the content and cover the fixed shadows once
-   you reach an end — pure CSS, no scroll listeners. */
+.card-location {
+  display: block;
+  color: var(--faint);
+}
+
+/* Scroll shadows: a soft shadow appears at an edge only when there's
+   more to read in that direction. */
 .card-body,
 .point.is-expanded .point-list,
 .station-card {
   background:
-    linear-gradient(var(--surface) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
-    linear-gradient(rgba(255, 255, 255, 0), var(--surface) 70%) center bottom / 100% 28px no-repeat local,
-    radial-gradient(farthest-side at 50% 0, rgba(20, 22, 26, 0.24), rgba(20, 22, 26, 0)) center top / 100% 12px no-repeat scroll,
-    radial-gradient(farthest-side at 50% 100%, rgba(20, 22, 26, 0.24), rgba(20, 22, 26, 0)) center bottom / 100% 12px no-repeat scroll;
-  background-color: var(--surface);
+    linear-gradient(var(--card) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), var(--card) 70%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(29, 43, 58, 0.22), rgba(29, 43, 58, 0)) center top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(29, 43, 58, 0.22), rgba(29, 43, 58, 0)) center bottom / 100% 12px no-repeat scroll;
+  background-color: var(--card);
+}
+
+.card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .card-overview {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -576,14 +793,12 @@ body {
   overflow: visible;
 }
 
-/* Collapsed lists animate open via max-height (height:auto can't be
-   transitioned, max-height can). */
 .card-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
   max-height: 0;
   overflow: hidden;
   opacity: 0;
@@ -592,12 +807,16 @@ body {
 
 .is-expanded .card-list {
   max-height: 2400px;
-  margin-top: 10px;
+  margin-top: 12px;
   opacity: 1;
 }
 
 .card-list li + li {
-  margin-top: 6px;
+  margin-top: 7px;
+}
+
+.card-list li::marker {
+  color: var(--accent, var(--faint));
 }
 
 .card-toggle {
@@ -607,20 +826,20 @@ body {
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  padding: 7px 12px;
-  font-size: 12.5px;
+  padding: 4px 0;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1;
-  color: var(--ink);
-  background: var(--chip);
+  color: var(--accent, var(--ink));
+  background: none;
   border: 0;
-  border-radius: 999px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
   cursor: pointer;
-  transition: background 0.2s ease;
 }
 
 .card-toggle:hover {
-  background: var(--chip-hover);
+  text-decoration-thickness: 2px;
 }
 
 .toggle-chevron {
@@ -631,18 +850,17 @@ body {
   transform: rotate(180deg);
 }
 
-/* Stacked (narrow-screen) concurrent roles show a compact card until
-   opened, so two cards fit in the lane at once. */
 .journey-item.is-stacked-secondary .journey-card:not(.is-expanded) {
   padding: 12px 14px 10px;
 }
 
-.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-body {
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-body,
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-location {
   display: none;
 }
 
 .journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-title {
-  font-size: 15px;
+  font-size: 16.5px;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -650,12 +868,13 @@ body {
 }
 
 .journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-toggle {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
-/* ---------- Education stations (on the line) ---------- */
+/* ---------- Education: graduation stations and "started" nodes ---------- */
 
-.station {
+.station,
+.edu-start {
   position: absolute;
   top: var(--axis-y);
   width: 0;
@@ -665,10 +884,12 @@ body {
   transition: opacity 0.3s ease;
 }
 
-.station.is-expanded {
+.station.is-expanded,
+.edu-start.is-expanded {
   z-index: 30;
 }
 
+/* An engraved double frame, like a calling card. */
 .station-pill {
   position: absolute;
   left: 0;
@@ -679,20 +900,19 @@ body {
   gap: 6px;
   max-width: 260px;
   height: 30px;
-  padding: 0 12px 0 8px;
+  padding: 0 12px 0 9px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
   color: var(--ink);
-  background: var(--surface);
-  border: 1.5px solid var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--ink-2);
   border-radius: 999px;
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  /* The ring "cuts" the axis line around the pill. */
-  box-shadow: 0 0 0 3px var(--bg);
-  transition: transform 0.2s ease, background 0.2s ease;
+  box-shadow: 0 0 0 3px var(--desk), inset 0 0 0 2px var(--card), inset 0 0 0 3px var(--hair);
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 .station.is-raised .station-pill {
@@ -700,8 +920,9 @@ body {
 }
 
 .station.is-passed .station-pill {
-  background: var(--ink);
   color: #fff;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px var(--desk), inset 0 0 0 2px var(--ink), inset 0 0 0 3px rgba(255, 255, 255, 0.25);
 }
 
 .station.is-passed .station-year {
@@ -720,47 +941,96 @@ body {
 .station-year {
   flex: none;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.edu-node {
+  position: absolute;
+  left: -5px;
+  top: calc(5.5px + var(--edu-lane, 0) * 7px);
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--edu);
+  background: var(--desk);
+  transition: background 0.25s ease;
+}
+
+.edu-start.is-passed .edu-node {
+  background: var(--edu);
+}
+
+.edu-start-pill {
+  position: absolute;
+  left: 9px;
+  top: calc(8px + var(--edu-lane, 0) * 7px);
+  height: 19px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 17px;
+  color: var(--edu);
+  background: var(--card);
+  border: 1px solid var(--edu);
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 0 3px var(--desk);
 }
 
 .station-card {
   position: absolute;
   left: 0;
-  bottom: 24px;
+  bottom: 26px;
   transform: translateX(-50%);
-  width: min(300px, 86vw);
+  width: min(310px, 86vw);
   max-height: calc(var(--axis-y) - var(--expand-top) - 30px);
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 16px 36px -18px rgba(20, 22, 26, 0.45);
+  padding: 16px 18px;
+  border: 2px solid var(--edu);
+  border-radius: 3px;
+  box-shadow: var(--paper-shadow), 0 20px 36px -22px rgba(29, 43, 58, 0.45);
   pointer-events: auto;
   visibility: hidden;
   opacity: 0;
   transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+  --accent: var(--edu);
 }
 
-.station.is-expanded .station-card {
+.station.is-expanded .station-card,
+.edu-start.is-expanded .station-card {
   visibility: visible;
   opacity: 1;
   transition-delay: 0s;
+  touch-action: pan-y;
 }
 
 .station-title {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.3;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.station-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
 }
 
 .station-list {
   margin: 8px 0 0;
   padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
-/* ---------- Points (branching below the line) ---------- */
+/* ---------- Points: tags hung from the line by a punched hole ---------- */
 
 .point {
   position: absolute;
@@ -778,32 +1048,33 @@ body {
 
 .point-dot {
   position: absolute;
-  left: -6px;
-  top: -6px;
-  width: 12px;
-  height: 12px;
+  left: -5.5px;
+  top: -5.5px;
+  width: 11px;
+  height: 11px;
   box-sizing: border-box;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--ink-soft);
-  transition: background 0.25s ease;
+  background: var(--card);
+  border: 1.5px solid var(--ink-2);
+  transition: background 0.3s ease;
 }
 
 .point.is-revealed .point-dot {
-  background: var(--ink-soft);
+  background: var(--ink-2);
 }
 
-/* The leader line "draws" downward when the playhead reaches it. */
+/* The tag's string. */
 .point-stem {
   position: absolute;
   left: -0.5px;
   top: 6px;
   width: 1px;
   height: calc(var(--stem) - 6px);
-  background: var(--line-strong);
+  background: var(--ink-2);
+  opacity: 0.45;
   transform-origin: top;
   transform: scaleY(0);
-  transition: transform 0.35s ease;
+  transition: transform 0.4s ease;
 }
 
 .point.is-revealed .point-stem {
@@ -819,34 +1090,52 @@ body {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px dashed var(--line-strong);
-  border-radius: 10px;
+  padding: 14px 13px 10px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(29, 43, 58, 0.04), 0 10px 20px -16px rgba(29, 43, 58, 0.4);
   pointer-events: auto;
   visibility: hidden;
   opacity: 0;
-  transform: translateY(-6px);
-  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s, box-shadow 0.25s ease;
+  transform: translateY(-8px) rotate(-0.6deg);
+  transform-origin: var(--hole-x, 50%) 0;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s, box-shadow 0.25s ease;
+}
+
+/* The punched, reinforced hole where the string meets the tag. */
+.point-card::before {
+  content: "";
+  position: absolute;
+  left: var(--hole-x, 50%);
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--desk);
+  border: 1.5px solid var(--ink-2);
 }
 
 .point.is-revealed .point-card {
   visibility: visible;
   opacity: 1;
   transform: none;
-  transition-delay: 0.18s, 0.18s, 0s, 0s;
+  transition-delay: 0.15s, 0.15s, 0s, 0s;
 }
 
 .point.is-expanded .point-card {
-  border-style: solid;
-  box-shadow: 0 16px 36px -18px rgba(20, 22, 26, 0.45);
+  box-shadow: 0 1px 0 rgba(29, 43, 58, 0.05), 0 22px 40px -22px rgba(29, 43, 58, 0.5);
+  touch-action: pan-y;
 }
 
 .point-title {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.3;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -855,15 +1144,11 @@ body {
 
 .point-role {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.point.is-expanded .point-role {
-  white-space: normal;
 }
 
 .point.is-expanded .point-title {
@@ -871,10 +1156,14 @@ body {
   overflow: visible;
 }
 
+.point.is-expanded .point-role {
+  white-space: normal;
+}
+
 .point-list {
   flex: 1 1 auto;
   min-height: 0;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .point.is-expanded .point-list {
@@ -882,9 +1171,10 @@ body {
 }
 
 .point-card .card-toggle {
-  margin-top: 8px;
-  padding: 5px 10px;
-  font-size: 12px;
+  margin-top: 6px;
+  padding: 2px 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
 }
 
 /* ---------- Focus mode: one card open, everything else recedes ---------- */
@@ -892,12 +1182,13 @@ body {
 #track.has-expanded-card .journey-card:not(.is-expanded),
 #track.has-expanded-card .axis,
 #track.has-expanded-card .point:not(.is-expanded),
-#track.has-expanded-card .station:not(.is-expanded) {
+#track.has-expanded-card .station:not(.is-expanded),
+#track.has-expanded-card .edu-start:not(.is-expanded) {
   --dim: 0.14;
 }
 
 /* ============================================================
-   HUD (fixed above the track)
+   HUD
    ============================================================ */
 
 #timeline-hud {
@@ -925,7 +1216,9 @@ body {
 }
 
 #track-frame.has-expanded-card #playhead-chip,
-#track-frame.has-expanded-card #playhead-line {
+#track-frame.has-expanded-card #playhead-line,
+#timeline-hud.is-past-end #playhead-chip,
+#timeline-hud.is-past-end #playhead-line {
   opacity: 0;
 }
 
@@ -940,22 +1233,65 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: var(--ink);
+  height: 2px;
+  background: linear-gradient(90deg, var(--foil), var(--foil-light));
   transform-origin: left center;
   transform: scaleX(0);
+}
+
+#timeline-brand {
+  position: absolute;
+  top: 12px;
+  left: 18px;
+  max-width: calc(100% - 140px);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 4px 8px 4px 4px;
+  margin: -4px;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#timeline-brand:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.timeline-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#timeline-brand-name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeline-brand-sub {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 #playhead-line {
   position: absolute;
   left: var(--playhead-x);
   top: var(--lane-bottom);
-  width: 2px;
+  width: 0;
   height: calc(var(--axis-y) - var(--lane-bottom));
-  margin-left: -1px;
-  background: linear-gradient(to bottom, rgba(31, 35, 40, 0), rgba(31, 35, 40, 0.5));
+  border-left: 1px dashed rgba(29, 43, 58, 0.45);
 }
 
+/* An ink date stamp riding on the line. */
 #playhead-chip {
   position: absolute;
   left: var(--playhead-x);
@@ -963,61 +1299,19 @@ body {
   transform: translate(-50%, -50%);
   padding: 6px 11px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   color: #fff;
   background: var(--ink);
-  border-radius: 999px;
+  border-radius: 2px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 3px var(--bg);
+  box-shadow: 0 0 0 2px var(--desk), 0 0 0 3px var(--ink);
 }
 
 #track-frame.is-narrow #playhead-chip {
-  transform: translate(-6px, -50%);
-}
-
-#timeline-brand {
-  position: absolute;
-  top: 12px;
-  left: 20px;
-  max-width: calc(100% - 140px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 4px 6px;
-  margin: -4px -6px;
-  text-align: left;
-  color: var(--ink);
-  background: none;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-#timeline-brand:hover {
-  background: rgba(31, 35, 40, 0.05);
-}
-
-#timeline-brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.timeline-brand-sub {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  transform: translate(-4px, -50%);
 }
 
 #chapter-nav {
@@ -1030,22 +1324,22 @@ body {
 }
 
 #chapter-nav button {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   padding: 0;
   color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
+  background: var(--card);
+  border: 1px solid var(--rule);
   border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.06);
+  box-shadow: 0 1px 2px rgba(29, 43, 58, 0.08);
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
 #chapter-nav button:hover {
-  background: var(--chip);
+  border-color: var(--ink);
 }
 
 #chapter-nav button:active {
@@ -1053,20 +1347,21 @@ body {
 }
 
 /* ============================================================
-   SKILL DOCK
+   SKILL DOCK — a ledger strip along the bottom
    ============================================================ */
 
 #skill-dock {
   flex: none;
-  height: 72px;
+  height: 96px;
   box-sizing: border-box;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 18px;
   padding: 0 20px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: rgba(255, 255, 255, 0.85);
-  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  border-top: 1px solid var(--rule);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   transition: opacity 0.3s ease;
@@ -1077,82 +1372,229 @@ body {
   pointer-events: none;
 }
 
-.skill-dock-label {
-  flex: none;
+.skill-dock-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 150px;
+}
+
+.skill-dock-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+#skill-tier-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tier-count {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
-#skill-count:not(:empty) {
-  min-width: 20px;
-  padding: 2px 6px;
-  box-sizing: border-box;
-  font-size: 11px;
-  text-align: center;
-  color: #fff;
-  background: var(--ink);
-  border-radius: 999px;
-  letter-spacing: 0;
-}
-
+/* Exactly two rows of the most recent skills; the rest live in "See all". */
 #skill-archive {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-self: center;
+  gap: 6px 7px;
+  max-height: 62px;
+  overflow: hidden;
 }
 
 .skill-token {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: 7px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px 0 8px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
   white-space: nowrap;
   opacity: 0;
-  transform: scale(0.8);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease, transform 0.25s ease, border-color 0.3s ease;
 }
 
 .skill-token.is-visible {
   opacity: 1;
-  transform: scale(1);
+  transform: none;
 }
 
 .skill-token.is-leaving {
   opacity: 0;
-  transform: scale(0.8);
+  transform: translateY(4px);
 }
 
-.skill-token .skill-level {
-  font-weight: 700;
-  color: var(--muted);
+.skill-token[data-tier="2"] {
+  border-color: var(--rule);
 }
 
-/* Brief pulse whenever a skill's level changes. */
-@keyframes skill-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0.3); }
-  100% { box-shadow: 0 0 0 10px rgba(31, 35, 40, 0); }
+.skill-token[data-tier="3"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-color: var(--foil-light);
+}
+
+/* Tier pips: one, two, or three filled — gold foil at Expert. */
+.skill-pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.skill-pips i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--hair);
+  transition: background 0.3s ease;
+}
+
+[data-tier="1"] .skill-pips i:nth-child(1),
+[data-tier="2"] .skill-pips i:nth-child(-n + 2) {
+  background: var(--ink-2);
+}
+
+[data-tier="3"] .skill-pips i {
+  background: var(--foil);
+}
+
+@keyframes skill-upgrade {
+  0% { box-shadow: 0 0 0 0 rgba(168, 135, 70, 0.55); }
+  100% { box-shadow: 0 0 0 9px rgba(168, 135, 70, 0); }
 }
 
 .skill-token.just-upgraded {
-  animation: skill-pulse 0.6s ease-out;
+  animation: skill-upgrade 0.7s ease-out;
+}
+
+#skill-panel-open {
+  padding: 9px 15px;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+/* ---------- "See all" sheet ---------- */
+
+#skill-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 16px 0;
+  background: rgba(29, 43, 58, 0.28);
+}
+
+.skill-panel-sheet {
+  width: 100%;
+  max-width: 880px;
+  max-height: 80%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: 26px 32px 32px;
+  background: var(--card);
+  border: 1.5px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  box-shadow: 0 -20px 40px -24px rgba(29, 43, 58, 0.5);
+  animation: sheet-rise 0.3s ease;
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.skill-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skill-panel-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 27px;
+}
+
+#skill-panel-close {
+  padding: 6px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.skill-panel-intro {
+  margin: 8px 0 18px;
+  max-width: 64ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.skill-group + .skill-group {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hair);
+}
+
+.skill-group h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+}
+
+.skill-group-count {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.skill-group-note {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.skill-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.skill-panel-empty {
+  margin: 0;
+  color: var(--muted);
 }
 
 /* ============================================================
@@ -1160,14 +1602,18 @@ body {
    ============================================================ */
 
 @media (max-width: 639px) {
-  #skill-dock {
-    height: 64px;
-    padding: 0 14px;
-    gap: 10px;
+  .landing-card {
+    padding: 32px 24px 28px;
+  }
+
+  .monogram-emboss {
+    width: 62px;
+    height: 62px;
+    font-size: 23px;
   }
 
   .card-title {
-    font-size: 17px;
+    font-size: 19px;
   }
 
   .card-overview {
@@ -1177,31 +1623,51 @@ body {
   #chapter-nav {
     right: 12px;
   }
+
+  #timeline-brand .timeline-brand-sub {
+    display: none;
+  }
+
+  #skill-dock {
+    height: 70px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .skill-dock-summary {
+    display: none;
+  }
+
+  #skill-archive {
+    max-height: 28px;
+  }
+
+  .skill-panel-sheet {
+    padding: 20px 18px 26px;
+  }
 }
 
 /* ============================================================
    DETAIL POPUPS
    ============================================================ */
 
-/* Words linked to a Detail popup — dotted underline signals "hover
-   for more" without looking like a normal link (it isn't one). */
 .detail-anchor {
   text-decoration: underline dotted;
+  text-underline-offset: 3px;
   cursor: help;
 }
 
-/* Single reusable popup, positioned via JS (see showDetailPopup).
-   pointer-events: none means the popup itself never triggers hover
-   logic, so moving the mouse over it can't cause flicker. */
 #detail-popup {
   position: fixed;
   max-width: 280px;
-  background: #222;
+  padding: 11px 14px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.45;
   color: #fff;
-  padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  line-height: 1.4;
+  background: var(--ink);
+  border-radius: 3px;
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
@@ -1214,7 +1680,9 @@ body {
 
 #detail-popup h4 {
   margin: 0 0 4px;
-  font-size: 0.9rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 15px;
 }
 
 #detail-popup p {
@@ -1222,38 +1690,76 @@ body {
 }
 
 /* ============================================================
-   RESUME OVERLAY
-   A genuine full-screen takeover, separate from #track entirely.
-   Shown/hidden by main.js based on the timeline's zone.
+   RESUME — a sheet of paper on the desk
    ============================================================ */
+
 #resume-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #fff;
   overflow-y: auto;
-  padding: 60px 24px 40px;
+  background: var(--desk) var(--grain);
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+
+#resume-page {
+  box-sizing: border-box;
+  max-width: calc(8.5in + 32px);
+  margin: 0 auto;
+  padding: 0 16px 56px;
+}
+
+.resume-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0;
+  background: linear-gradient(var(--desk) 70%, rgba(228, 234, 236, 0));
 }
 
 #resume-back {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 101;
-  padding: 8px 14px;
-  background: #fff;
-  border: 1px solid #999;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: none;
+  border: 0;
   cursor: pointer;
-  font: inherit;
 }
 
-#resume-content {
-  max-width: 7.5in; /* matches the actual printable width at 0.5in page margins */
-  margin: 0 auto;
-  font-size: 10.5pt; /* pt units render identically on screen and in print,
-    so this is WYSIWYG — no separate print-only override needed */
+#resume-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+#download-resume {
+  padding: 11px 20px;
+  font-size: 14.5px;
+}
+
+.resume-sheet {
+  box-sizing: border-box;
+  padding: 0.5in;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(29, 43, 58, 0.08), 0 30px 60px -36px rgba(29, 43, 58, 0.45);
+}
+
+/* The resume document itself. Sizes follow the RESUME - BASE template in
+   points, so the screen matches print. The same class is applied to the
+   page-fit measurer in main.js, so measurements match too. */
+.resume-doc {
+  font-family: var(--font-doc);
+  font-size: 10.5pt;
   line-height: 1.35;
+  color: #1c1c1c;
 }
 
 .resume-header {
@@ -1262,145 +1768,230 @@ body {
 }
 
 .resume-header h1 {
-  font-size: 20pt; /* matches your original template spec */
   margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20pt;
+  letter-spacing: 0.08em;
   text-transform: uppercase; /* "CHRISTIAN SCHLAEFER", per the template */
 }
 
-/* Organization names render in caps ("SAP CONCUR | ..."), per the data
-   document — stored in normal case in data.js so the timeline reads well. */
-.resume-org {
-  text-transform: uppercase;
-}
-
 .resume-title {
-  font-size: 14pt; /* matches your original template spec */
-  font-weight: bold;
-  margin: 2pt 0;
+  margin: 3pt 0 2pt;
+  font-size: 14pt;
+  font-weight: 700;
 }
 
 .resume-contact {
   font-size: 10.5pt;
-  color: #555;
+  color: #444;
 }
 
 .resume-section {
   margin-bottom: 12pt;
 }
 
+.resume-section p {
+  margin: 0;
+}
+
 .resume-section h2 {
-  font-size: 10.5pt;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 1px solid #ccc;
+  margin: 0 0 6pt;
   padding-bottom: 3pt;
-  margin-bottom: 6pt;
-  /* Keeps a section header from ever being stranded alone at the
-     bottom of a page with its content pushed to the next one. */
+  font-family: var(--font-doc);
+  font-size: 10.5pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #bcbcbc;
   break-after: avoid;
   page-break-after: avoid;
 }
 
 .resume-entry {
   margin-bottom: 8pt;
-  /* Forces the whole block (title + meta + bullets) to move together
-     to the next page rather than splitting across the boundary. */
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
 .resume-entry-title {
-  font-size: 10.5pt;
-  font-weight: bold;
   margin: 0;
+  font-size: 10.5pt;
+  font-weight: 700;
+}
+
+.resume-org {
+  text-transform: uppercase;
 }
 
 .resume-entry-meta {
-  font-style: italic;
+  margin: 1pt 0 3pt;
   font-size: 10.5pt;
+  font-style: italic;
   color: #555;
-  margin: 1pt 0 4pt;
 }
 
 .resume-entry ul {
-  margin: 0;
-  padding-left: 16pt;
+  margin: 2pt 0 0;
+  padding-left: 15pt;
 }
 
 .resume-entry li {
   margin-bottom: 2pt;
 }
 
-/* Fluency and education lines are stacked rows, not paragraphs. */
 .resume-fluency {
-  margin: 0 0 3pt;
+  margin-bottom: 3pt !important;
 }
 
 .resume-education {
-  margin: 0 0 2pt;
+  margin-bottom: 2pt !important;
 }
 
-/* Default browser print margins (~1in) eat significant space — this
-   matches the 0.5in margin the page-fit measurement logic assumes. */
 @page {
   margin: 0.5in;
 }
 
-#download-resume {
-  display: block;
-  margin: 24px auto 0;
-  padding: 10px 22px;
+#more-info-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 26px;
+}
+
+#more-info-open {
+  padding: 11px 20px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
   cursor: pointer;
 }
 
-/* Lead capture — deliberately NOT inside #resume-content, so it never
-   appears in the printed/downloaded PDF (see @media print below). */
-#lead-capture {
-  max-width: 700px;
-  margin: 32px auto 0;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  text-align: center;
+#more-info-open:hover {
+  color: #fff;
+  background: var(--ink);
+}
+
+/* ---------- Email popup: a note card with an oxblood edge ---------- */
+
+#lead-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(29, 43, 58, 0.35);
+}
+
+.lead-card {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  box-sizing: border-box;
+  padding: 34px 34px 30px;
+  background: var(--card);
+  border: 2px solid var(--seal);
+  border-radius: 4px;
+  box-shadow: 0 30px 60px -30px rgba(29, 43, 58, 0.6);
+  animation: sheet-rise 0.3s ease;
+}
+
+#lead-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+#lead-close:hover {
+  color: var(--ink);
+  background: var(--desk);
+}
+
+#lead-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 27px;
+  line-height: 1.15;
+}
+
+.lead-intro {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
 }
 
 #lead-form {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
+  flex-direction: column;
+}
+
+#lead-form label {
   margin-top: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
+/* Fill-in lines, like a printed reply card. */
 #lead-form input {
-  padding: 8px 10px;
+  padding: 8px 0 7px;
   font: inherit;
-  border: 1px solid #999;
-  border-radius: 6px;
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
 }
 
-#lead-form button {
-  padding: 8px 16px;
-  cursor: pointer;
+#lead-form input:focus {
+  outline: none;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 6px;
 }
 
-/* Side-by-side inputs get cramped on a phone-width screen. */
-@media (max-width: 480px) {
-  #lead-form {
-    flex-direction: column;
-    align-items: stretch;
+#lead-form button[type="submit"] {
+  align-self: flex-start;
+  margin-top: 24px;
+}
+
+#lead-confirmation {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+@media (max-width: 639px) {
+  .resume-sheet {
+    padding: 22px 18px;
   }
-  #lead-form input,
-  #lead-form button {
-    width: 100%;
+
+  .resume-toolbar {
+    padding: 10px 0;
+  }
+
+  .lead-card {
+    padding: 28px 22px 24px;
   }
 }
 
-/* "Download PDF" uses the browser's native print dialog (which every
-   browser can save as a real PDF). Hiding #stage entirely, forcing the
-   overlay static, and letting the page grow again means printing
-   paginates the resume normally. */
+/* "Download PDF" uses the browser's print dialog. Only the resume
+   document itself prints — no desk, toolbar, popup, or timeline. */
 @media print {
   html,
   body {
@@ -1410,28 +2001,34 @@ body {
   }
   #stage,
   #timeline-announcer,
-  #detail-popup {
+  #detail-popup,
+  .resume-toolbar,
+  #more-info-bar,
+  #lead-dialog,
+  #debug-panel {
     display: none !important;
   }
   #resume-overlay {
     position: static !important;
     overflow: visible !important;
+    background: #fff !important;
   }
-  #resume-back,
-  #lead-capture,
-  #download-resume {
-    display: none !important;
+  #resume-page {
+    max-width: none;
+    padding: 0;
+  }
+  .resume-sheet {
+    padding: 0;
+    box-shadow: none;
   }
 }
 
 /* ============================================================
-   DEBUG PANEL
-   Only ever created when ?debug=true is in the URL. z-index is above
-   the resume overlay's (100), so it stays usable while that's open.
+   DEBUG PANEL (only created with ?debug=true)
    ============================================================ */
 #debug-panel {
   position: fixed;
-  top: 60px; /* sits below the chapter navigation buttons */
+  top: 64px; /* below the chapter navigation buttons */
   right: 8px;
   z-index: 999;
   width: min(260px, calc(100vw - 16px));
@@ -1485,10 +2082,4 @@ body {
 #debug-log div {
   margin-bottom: 2px;
   opacity: 0.85;
-}
-
-@media print {
-  #debug-panel {
-    display: none !important;
-  }
 }

@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
   if (!finalizedBody || typeof finalizedBody !== "object") {
     return res.status(400).json({ error: "Invalid finalizedBody payload" });
   }
-  if (jobDescription != null && (typeof jobDescription !== "string" || jobDescription.length > 5000)) {
+  if (jobDescription != null && (typeof jobDescription !== "string" || jobDescription.length > 8000 /* visitor text + researched summary */)) {
     return res.status(400).json({ error: "Invalid job description" });
   }
   const strings = (arr) => (Array.isArray(arr) ? arr : [])
