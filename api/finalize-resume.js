@@ -1,42 +1,24 @@
 // POST /api/finalize-resume
-// Body: { jobDescription: string, finalizedBody: {...} }
-// Returns: { title: string, executiveProfile: string }
+// Body: { jobDescription, finalizedBody }
+//   finalizedBody: { professional, pointsSection, coreExpertise, fluency,
+//                    descriptionOptions, contactLineOptions, defaultExecutiveProfile }
+// Returns: { title, contactLine, executiveProfile }
 //
-// Runs ONLY after experience/bullet selection AND page-fitting are both
-// already final — this call is given ONLY that finished body, never the
-// full career history. That's what makes "grounded in what actually
-// made the resume" a structural guarantee rather than just an
-// instruction: the excluded material is literally not in this call's
-// context at all, so it cannot reference it even by mistake.
-//
-// Uses forced tool-use structured output from the start — see
-// compile-resume.js for why this is the reliable approach.
+// Runs ONLY after the body is final (selection + two-page fit), and sees
+// ONLY that finished body — never the full career history — so the
+// tailored Executive Profile is structurally grounded in what's actually
+// on the resume. The Professional Description and Contact Line are
+// enum-constrained to the candidate's own options: the model selects,
+// it never writes a new one.
 
-const FINALIZE_TOOL = {
-  name: "finalize_resume_header",
-  description: "Records the finalized resume title and executive summary paragraph.",
-  input_schema: {
-    type: "object",
-    properties: {
-      title: {
-        type: "string",
-        description: "A short professional headline, similar length/register to the default example provided."
-      },
-      executiveProfile: {
-        type: "string",
-        description: "A 2-4 sentence executive summary paragraph, similar length to the default example provided."
-      }
-    },
-    required: ["title", "executiveProfile"]
-  }
-};
+const MAX_PROFILE_GROWTH = 1.3; // a tailored profile may not grow past 130% of the baseline
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ---- Basic abuse guards (same reasoning as the other two functions) ----
+  // ---- Basic abuse guards (same reasoning as the other functions) ----
   const origin = req.headers.origin || req.headers.referer || "";
   if (!req.headers.host || !origin.includes(req.headers.host)) {
     return res.status(403).json({ error: "Forbidden" });
@@ -51,11 +33,48 @@ module.exports = async function handler(req, res) {
   if (jobDescription != null && (typeof jobDescription !== "string" || jobDescription.length > 5000)) {
     return res.status(400).json({ error: "Invalid job description" });
   }
-  // --------------------------------------------------------------------
+  const strings = (arr) => (Array.isArray(arr) ? arr : [])
+    .filter((s) => typeof s === "string" && s.trim() && s.length <= 300)
+    .slice(0, 12);
+  const descriptionOptions = [...new Set(strings(finalizedBody.descriptionOptions))];
+  const contactLineOptions = [...new Set(strings(finalizedBody.contactLineOptions))];
+  const defaultProfile = typeof finalizedBody.defaultExecutiveProfile === "string"
+    ? finalizedBody.defaultExecutiveProfile.slice(0, 2000)
+    : "";
+  if (!descriptionOptions.length || !contactLineOptions.length || !defaultProfile) {
+    return res.status(400).json({ error: "Missing header options" });
+  }
+  // ---------------------------------------------------------------------
 
   const fallback = {
-    title: finalizedBody.defaultTitle,
-    executiveProfile: finalizedBody.defaultExecutiveProfile
+    title: descriptionOptions[0],
+    contactLine: contactLineOptions[0],
+    executiveProfile: defaultProfile
+  };
+
+  // The model sees the finished body only — not the option lists' metadata.
+  const body = {
+    professional: finalizedBody.professional,
+    pointsSection: finalizedBody.pointsSection,
+    coreExpertise: finalizedBody.coreExpertise,
+    fluency: finalizedBody.fluency
+  };
+
+  const tool = {
+    name: "finalize_resume_header",
+    description: "Records the resume header: the professional description, contact line, and executive profile.",
+    input_schema: {
+      type: "object",
+      properties: {
+        professionalDescription: { type: "string", enum: descriptionOptions },
+        contactLine: { type: "string", enum: contactLineOptions },
+        executiveProfile: {
+          type: "string",
+          description: "The tailored executive profile paragraph, close to the baseline's length."
+        }
+      },
+      required: ["professionalDescription", "contactLine", "executiveProfile"]
+    }
   };
 
   try {
@@ -69,24 +88,27 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         model: "claude-sonnet-5",
         max_tokens: 8192,
-        tools: [FINALIZE_TOOL],
+        tools: [tool],
         tool_choice: { type: "tool", name: "finalize_resume_header" },
         messages: [
           {
             role: "user",
             content:
-              "A resume's content has been fully finalized — every experience, bullet, and skill below is already decided and will NOT change. Your only job is to write a title and executive summary that best fit THIS finished body, for this specific job application.\n\n" +
+              "A resume's body has been fully finalized — every experience, bullet, expertise item, and fluency line below is decided and will NOT change. Your job is the header, for this specific job application.\n\n" +
               `Job context:\n"""\n${(jobDescription || "").trim()}\n"""\n\n` +
-              "Finalized resume body (JSON) — this is the ONLY material you may draw from:\n" +
-              JSON.stringify(finalizedBody) +
+              "Finalized resume body (JSON) — the ONLY material you may draw facts from, besides the baseline profile below:\n" +
+              JSON.stringify(body) +
               "\n\n" +
-              `Candidate's default title, for reference/tone: "${finalizedBody.defaultTitle}"\n` +
-              `Candidate's default executive summary, for reference/tone: "${finalizedBody.defaultExecutiveProfile}"\n\n` +
-              "Rules:\n" +
-              "- The title and summary must accurately reflect the finalized body above — never introduce a claim, skill, or fact that isn't demonstrated somewhere in it.\n" +
-              "- Adapt the EMPHASIS of the default title/summary to match what this specific finalized body emphasizes for this role — don't just repeat the defaults verbatim unless they're genuinely already the best fit.\n" +
-              "- Keep the summary to roughly the same length as the default example — this is a resume header, not a cover letter.\n" +
-              "- Before finalizing, double-check: does the title contradict or redundantly repeat the summary? Do both read as a clean, professional, consistent pair? Make one last small adjustment if not."
+              "1. PROFESSIONAL DESCRIPTION: choose the option that best fits this role and this finished body. If unsure, use the first option.\n" +
+              `   Options: ${JSON.stringify(descriptionOptions)}\n\n` +
+              "2. CONTACT LINE: choose the option that best fits the role. \"CONUS / OCONUS\" signals readiness for domestic and overseas assignments — best for roles with international, government, defense, or heavy-travel components. Otherwise use the first option.\n" +
+              `   Options: ${JSON.stringify(contactLineOptions)}\n\n` +
+              "3. EXECUTIVE PROFILE: start from the candidate's baseline below and tailor its EMPHASIS to this role and this finished body.\n" +
+              `   Baseline: "${defaultProfile}"\n` +
+              "   - Keep it close to the baseline's length (within about 10%) — it's a resume header, not a cover letter.\n" +
+              "   - Never introduce a claim, number, or skill that isn't in the baseline or demonstrated in the finalized body.\n" +
+              "   - If the baseline already fits this role well, light edits are better than a rewrite.\n\n" +
+              "Before finalizing, check that the description and profile read as a consistent pair."
           }
         ]
       })
@@ -97,18 +119,25 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await anthropicResponse.json();
-    const toolUseBlock = data.content.find((block) => block.type === "tool_use");
-    if (!toolUseBlock || !toolUseBlock.input.title || !toolUseBlock.input.executiveProfile) {
+    const toolUseBlock = (data.content || []).find((block) => block.type === "tool_use");
+    if (!toolUseBlock) {
       const blockTypes = (data.content || []).map((b) => b.type).join(", ") || "none";
-      console.error(`finalize-resume: no valid tool_use block (stop_reason: ${data.stop_reason}, blocks: [${blockTypes}])`);
+      console.error(`finalize-resume: no tool_use block (stop_reason: ${data.stop_reason}, blocks: [${blockTypes}])`);
       return res.status(200).json(fallback);
     }
 
-    console.log("finalize-resume: succeeded");
-    return res.status(200).json({
-      title: toolUseBlock.input.title,
-      executiveProfile: toolUseBlock.input.executiveProfile
-    });
+    // Enforce every rule in code, not just in the prompt.
+    const input = toolUseBlock.input || {};
+    const title = descriptionOptions.includes(input.professionalDescription) ? input.professionalDescription : fallback.title;
+    const contactLine = contactLineOptions.includes(input.contactLine) ? input.contactLine : fallback.contactLine;
+    let executiveProfile = typeof input.executiveProfile === "string" ? input.executiveProfile.trim() : "";
+    if (!executiveProfile || executiveProfile.length > defaultProfile.length * MAX_PROFILE_GROWTH) {
+      if (executiveProfile) console.warn(`finalize-resume: tailored profile too long (${executiveProfile.length} chars), using baseline`);
+      executiveProfile = defaultProfile;
+    }
+
+    console.log(`finalize-resume: succeeded — "${title}" / ${contactLine.includes("OCONUS") ? "CONUS/OCONUS" : "Remote/Travel"}`);
+    return res.status(200).json({ title, contactLine, executiveProfile });
   } catch (error) {
     console.error("Resume header finalization failed, using defaults:", error);
     return res.status(200).json(fallback);

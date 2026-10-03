@@ -27,7 +27,7 @@ function renderLandingPanel() {
     <div class="landing-inner">
       <p class="landing-eyebrow">Interactive career timeline</p>
       <h1>${profile.name}</h1>
-      <p class="landing-title">${profile.title}</p>
+      <p class="landing-title">${profile.descriptionOptions[0]}</p>
       <p class="landing-intro">Tell me about the role you're hiring for, and I'll tailor this timeline to show what's most relevant — or leave it blank for a general overview.</p>
       <form id="job-intake-form">
         <label class="sr-only" for="job-description">Job description</label>
@@ -143,23 +143,20 @@ async function runJobCuration(jobDescription) {
 
 // Mechanical fallback only — used if /api/compile-resume is unreachable
 // or errors, so the resume still renders something correct rather than
-// nothing. The real per-bullet judgment and synthesis happen server-side.
+// nothing. Every curated experience with all its bullets; no optional
+// Points (choosing those is exactly the judgment the AI exists to make);
+// empty expertise/fluency lists that buildResumeData fills with defaults.
 function deriveResumeSelectionFromCuration(curation) {
   const experiences = timeline
     .filter((e) => e.type === "experience" && curation.includedIds.includes(e.id))
-    .map((e) => ({
-      id: e.id,
-      section: (e.resumeCategories && e.resumeCategories[0]) || "professional",
-      bullets: e.achievements
-    }));
-  // Mechanical fallback is deliberately conservative: section: null
-  // means every Point stays a simple featured mention here, never
-  // nested — that judgment call is exactly what the real LLM path
-  // exists to make.
-  const points = timeline
-    .filter((e) => e.type === "point" && curation.includedIds.includes(e.id))
-    .map((e) => ({ id: e.id, bullets: e.bullets, section: null }));
-  return { experiences, points };
+    .map((e) => ({ id: e.id, section: e.resumeSection || "professional", bullets: e.achievements }));
+  return {
+    experiences,
+    points: [],
+    pointsHeader: resumeOptions.pointsHeaders[0],
+    coreExpertise: [],
+    fluency: []
+  };
 }
 
 // ============================================================
@@ -402,143 +399,159 @@ function hideDetailPopup(popup) {
 
 // ============================================================
 // RESUME COMPILER
-// Takes a selection (the curation decision — LLM output, or the
-// mechanical fallback) and turns it into the final resume document.
-// This never decides WHAT to include — only how to lay out a decision
-// that's already been made. Unchanged by the timeline rebuild.
+// Turns a selection (live AI output, a revision, or the mechanical
+// fallback) into the final document, following the RESUME - BASE
+// template:
+//   NAME · Professional Description · Contact Line
+//   EXECUTIVE PROFILE · CORE EXPERTISE · PROFESSIONAL EXPERIENCE ·
+//   [Points section — header chosen per resume] ·
+//   TECHNICAL & INDUSTRY FLUENCY · EDUCATION
+// It never decides WHAT to include, but it enforces the template's hard
+// limits no matter where the selection came from: only listed options,
+// the character budgets, section placement from data.js, no duplicates.
 // ============================================================
 
-// Pools skill levels across an arbitrary set of entry IDs.
-// Returns name -> { count, tags }.
-function computeSkillLevelsForExperiences(experienceIds) {
-  const levels = new Map();
-  experienceIds.forEach((id) => {
-    const entry = timeline.find((e) => e.id === id);
-    if (!entry || !entry.skills) return;
-    entry.skills.forEach((skill) => {
-      if (!levels.has(skill.name)) {
-        levels.set(skill.name, { count: 0, tags: new Set() });
-      }
-      const record = levels.get(skill.name);
-      record.count += 1;
-      skill.tags.forEach((tag) => record.tags.add(tag));
-    });
-  });
-  return levels;
+// The data document's date style: "Jan. 2022-Present".
+const RESUME_MONTHS = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
+
+function formatResumeMonth(str) {
+  if (!str) return "";
+  if (str === "present") return "Present";
+  const [y, m] = String(str).split("-").map(Number);
+  return m ? `${RESUME_MONTHS[m - 1]} ${y}` : String(y);
 }
 
-// Builds one pooled, character-limited skill line for a given tag —
-// e.g. the "Core Expertise" line. Highest level first; stops adding
-// skills the moment the next one would exceed the character budget,
-// rather than overflowing and truncating mid-word.
-function buildSkillBucket(levelsMap, tag, maxChars) {
-  const candidates = Array.from(levelsMap.entries())
-    .filter(([, record]) => record.tags.has(tag))
-    .sort((a, b) => b[1].count - a[1].count)
-    .map(([name]) => name);
-
-  let result = "";
-  for (const name of candidates) {
-    const candidate = result ? `${result} | ${name}` : name;
-    if (candidate.length > maxChars) break;
-    result = candidate;
+function formatResumeDates(entry) {
+  if (entry.dateText) return entry.dateText;
+  if (entry.type === "point") {
+    return entry.endDate
+      ? `${formatResumeMonth(entry.date)}-${formatResumeMonth(entry.endDate)}`
+      : formatResumeMonth(entry.date);
   }
-  return result;
+  return `${formatResumeMonth(entry.dates.start)}-${formatResumeMonth(entry.dates.end)}`;
 }
 
-// Experience dates are "YYYY-MM" strings or "present"; Points use a
-// single "date" field. Handles both so nested Points sort
-// chronologically alongside Experiences within the same section.
+// Experience dates are "YYYY-MM" strings or "present"; Points use `date`
+// (plus an optional `endDate`). Used to order each section newest-first.
 function getSortableEndDate(entry) {
-  if (entry.type === "point") return new Date(`${entry.date}-01`).getTime();
+  if (entry.type === "point") return new Date(`${entry.endDate || entry.date}-01`).getTime();
   if (entry.dates.end === "present") return Infinity;
   return new Date(`${entry.dates.end}-01`).getTime();
 }
 
+// Keeps whole items, highest priority first, until the next one would
+// cross the character budget — never truncating mid-item.
+function fitItemsToBudget(items, maxChars) {
+  const kept = [];
+  let length = 0;
+  for (const item of items) {
+    const added = kept.length ? item.length + 3 : item.length; // " | " separator
+    if (length + added > maxChars) break;
+    kept.push(item);
+    length += added;
+  }
+  return kept;
+}
+
+// Maps a returned value back to the exact option text (tolerating case
+// or whitespace drift), or undefined if it isn't one of the options.
+function optionPicker(options) {
+  const byKey = new Map(options.map((option) => [option.trim().toLowerCase(), option]));
+  return (value) => (typeof value === "string" ? byKey.get(value.trim().toLowerCase()) : undefined);
+}
+
+function normalizeCoreExpertise(selected) {
+  const pick = optionPicker(resumeOptions.coreExpertise);
+  const chosen = [...new Set((Array.isArray(selected) ? selected : []).map(pick).filter(Boolean))];
+  return fitItemsToBudget(chosen.length ? chosen : resumeOptions.coreExpertise, resumeOptions.coreExpertiseMaxChars);
+}
+
+function normalizePointsHeader(header) {
+  return optionPicker(resumeOptions.pointsHeaders)(header) || resumeOptions.pointsHeaders[0];
+}
+
+// Fluency lines: only listed labels; list lines keep only their own items
+// (deduplicated across lines — Jira and Gainsight appear in two lists) and
+// fit the per-line budget; sentence lines are always rendered verbatim.
+function normalizeFluency(selected) {
+  const lineByLabel = new Map(resumeOptions.fluency.map((line) => [line.label.toLowerCase(), line]));
+  const build = (requested) => {
+    const usedItems = new Set();
+    const usedLabels = new Set();
+    const lines = [];
+    (Array.isArray(requested) ? requested : []).forEach((req) => {
+      if (!req || typeof req.label !== "string") return;
+      const option = lineByLabel.get(req.label.trim().toLowerCase());
+      if (!option || usedLabels.has(option.label)) return;
+      if (option.text) {
+        usedLabels.add(option.label);
+        lines.push({ label: option.label, text: option.text });
+        return;
+      }
+      const pick = optionPicker(option.items);
+      const wanted = Array.isArray(req.items) && req.items.length ? req.items : option.items;
+      const items = [...new Set(wanted.map(pick).filter(Boolean))].filter((item) => !usedItems.has(item));
+      const fitted = fitItemsToBudget(items, resumeOptions.fluencyLineMaxChars);
+      if (!fitted.length) return;
+      fitted.forEach((item) => usedItems.add(item));
+      usedLabels.add(option.label);
+      lines.push({ label: option.label, items: fitted });
+    });
+    return lines.slice(0, resumeOptions.fluencyMaxLines);
+  };
+  const lines = build(selected);
+  return lines.length ? lines : build(resumeOptions.fluency.slice(0, 3).map((line) => ({ label: line.label })));
+}
+
 function buildResumeData(selection) {
-  const includedIds = selection.experiences
-    .map((e) => e.id)
-    .concat((selection.points || []).map((p) => p.id));
-  const skillLevels = computeSkillLevelsForExperiences(includedIds);
-
   const professional = [];
-  const secondary = [];
-  let secondaryCategory = null;
+  const pointsEntries = [];
+  const seen = new Set();
 
-  selection.experiences.forEach((sel) => {
-    const entry = timeline.find((e) => e.id === sel.id);
-    if (!entry) return; // a stale/typo'd id shouldn't crash the whole resume
-    // sel.bullets is plain bullet TEXT — verbatim, combined, or
-    // rewritten by the compiler. The renderer just displays it.
-    const bulletTexts = (sel.bullets || []).filter(Boolean);
-    const compiled = { entry, bulletTexts };
-
-    if (sel.section === "professional") {
-      professional.push(compiled);
-    } else {
-      // Only one secondary category is ever used per resume.
-      secondaryCategory = sel.section;
-      secondary.push(compiled);
-    }
+  (selection.experiences || []).forEach((sel) => {
+    const entry = timeline.find((e) => e.id === sel.id && e.type === "experience");
+    if (!entry || seen.has(entry.id)) return;
+    seen.add(entry.id);
+    let bulletTexts = (sel.bullets || []).filter(Boolean);
+    // An included experience always shows at least one bullet.
+    if (!bulletTexts.length && entry.achievements && entry.achievements.length) bulletTexts = [entry.achievements[0]];
+    // Placement comes from the DATA (resumeSection), never the selection.
+    (entry.resumeSection === "points" ? pointsEntries : professional).push({ entry, bulletTexts });
   });
 
-  // Points come back as { id, bullets, section } — a truthy section
-  // means the compiler NESTED this one into a real heading (rendered
-  // like a mini-Experience); no section keeps it a single-line mention.
-  const featuredPoints = [];
-  (selection.points || []).forEach((pointSel) => {
-    const entry = timeline.find((e) => e.id === pointSel.id);
-    if (!entry) return;
-    const bulletTexts = (pointSel.bullets || []).filter(Boolean);
-
-    if (pointSel.section) {
-      const compiled = { entry, bulletTexts };
-      if (pointSel.section === "professional") {
-        professional.push(compiled);
-      } else {
-        secondaryCategory = pointSel.section;
-        secondary.push(compiled);
-      }
-    } else {
-      featuredPoints.push({ entry, bulletTexts });
-    }
+  (selection.points || []).forEach((sel) => {
+    const entry = timeline.find((e) => e.id === sel.id && e.type === "point");
+    if (!entry || entry.resumeEligible === false || seen.has(entry.id)) return;
+    const bulletTexts = (sel.bullets || []).filter(Boolean);
+    if (!bulletTexts.length) return;
+    seen.add(entry.id);
+    pointsEntries.push({ entry, bulletTexts });
   });
 
   const byRecency = (a, b) => getSortableEndDate(b.entry) - getSortableEndDate(a.entry);
   professional.sort(byRecency);
-  secondary.sort(byRecency);
+  pointsEntries.sort(byRecency);
 
   return {
-    profile,
+    name: profile.name,
+    // Header defaults — replaced by finalizeResumeHeader's choices.
+    title: profile.descriptionOptions[0],
+    contactLine: profile.contactLineOptions[0],
     executiveProfile: profile.executiveProfileDefault,
-    skillBuckets: {
-      expertise: buildSkillBucket(skillLevels, "expertise", 350),
-      hardTechnical: buildSkillBucket(skillLevels, "hardTechnical", 350),
-      softTechnical: buildSkillBucket(skillLevels, "softTechnical", 250)
-    },
+    coreExpertise: normalizeCoreExpertise(selection.coreExpertise),
     professional,
-    secondary: {
-      label: secondaryCategory ? secondaryHeadingLabels[secondaryCategory] : null,
-      entries: secondary
-    },
-    featuredPoints,
+    pointsSection: { label: normalizePointsHeader(selection.pointsHeader), entries: pointsEntries },
+    fluency: normalizeFluency(selection.fluency),
     education
   };
 }
 
 function renderResume(data) {
-  const contactLine = [
-    data.profile.location,
-    data.profile.travelAvailability,
-    data.profile.phone,
-    data.profile.email
-  ].filter(Boolean).join(" | ");
-
   return `
     <div class="resume-header">
-      <h1>${data.profile.name}</h1>
-      <p class="resume-title">${data.profile.title}</p>
-      <p class="resume-contact">${contactLine}</p>
+      <h1>${data.name}</h1>
+      <p class="resume-title">${data.title}</p>
+      <p class="resume-contact">${data.contactLine}</p>
     </div>
 
     <section class="resume-section">
@@ -548,34 +561,32 @@ function renderResume(data) {
 
     <section class="resume-section">
       <h2>Core Expertise</h2>
-      <p>${data.skillBuckets.expertise}</p>
+      <p>${data.coreExpertise.join(" | ")}</p>
     </section>
 
     <section class="resume-section">
       <h2>Professional Experience</h2>
-      ${data.professional.map(renderResumeItem).join("")}
+      ${data.professional.map(renderProfessionalEntry).join("")}
     </section>
 
-    ${data.secondary.entries.length > 0 ? `
+    ${data.pointsSection.entries.length ? `
       <section class="resume-section">
-        <h2>${data.secondary.label}</h2>
-        ${data.secondary.entries.map(renderResumeItem).join("")}
+        <h2>${data.pointsSection.label}</h2>
+        ${data.pointsSection.entries.map(renderPointsSectionEntry).join("")}
       </section>
     ` : ""}
 
     <section class="resume-section">
-      <h2>Technical Fluency</h2>
-      <p><strong>Systems, Data &amp; Applied AI:</strong> ${data.skillBuckets.hardTechnical}</p>
-      <p><strong>Technical Product &amp; Delivery:</strong> ${data.skillBuckets.softTechnical}</p>
-      ${data.featuredPoints.map(({ entry, bulletTexts }) =>
-        `<p class="resume-project">${entry.header} — ${bulletTexts.join("; ")}</p>`
+      <h2>Technical &amp; Industry Fluency</h2>
+      ${data.fluency.map((line) =>
+        `<p class="resume-fluency"><strong>${line.label}:</strong> ${line.text || line.items.join(" | ")}</p>`
       ).join("")}
     </section>
 
     <section class="resume-section">
       <h2>Education</h2>
       ${data.education.map((ed) =>
-        `<p>${ed.degree}: ${ed.institution} | ${ed.location} | ${ed.year}</p>`
+        `<p class="resume-education">${ed.degree} | ${ed.institution} | ${ed.location} | ${ed.year}</p>`
       ).join("")}
     </section>
 
@@ -583,29 +594,30 @@ function renderResume(data) {
   `;
 }
 
-// Dispatches by the source entry's real type — a nested Point and an
-// Experience look identical structurally ({ entry, bulletTexts }), but
-// their underlying fields differ.
-function renderResumeItem(item) {
-  return item.entry.type === "point" ? renderResumeNestedPoint(item) : renderResumeExperience(item);
-}
+const renderBullets = (bulletTexts) => `<ul>${bulletTexts.map((b) => `<li>${b}</li>`).join("")}</ul>`;
 
-function renderResumeExperience({ entry, bulletTexts }) {
+// PROFESSIONAL EXPERIENCE format: "ORG | Title", then "Dates | Location".
+function renderProfessionalEntry({ entry, bulletTexts }) {
+  const meta = [formatResumeDates(entry), entry.location].filter(Boolean).join(" | ");
   return `
     <div class="resume-entry" data-id="${entry.id}">
-      <p class="resume-entry-title">${entry.employer} | ${entry.jobTitle}</p>
-      <p class="resume-entry-meta">${entry.dates.start} – ${entry.dates.end} | ${entry.location}</p>
-      <ul>${bulletTexts.map((b) => `<li>${b}</li>`).join("")}</ul>
+      <p class="resume-entry-title"><span class="resume-org">${entry.employer}</span> | ${entry.jobTitle}</p>
+      <p class="resume-entry-meta">${meta}</p>
+      ${renderBullets(bulletTexts)}
     </div>
   `;
 }
 
-function renderResumeNestedPoint({ entry, bulletTexts }) {
+// Points-section format (Points AND experiences placed there): one line,
+// "ORG | Role | Location | Dates", skipping whatever an entry doesn't have.
+function renderPointsSectionEntry({ entry, bulletTexts }) {
+  const isPoint = entry.type === "point";
+  const org = isPoint ? entry.org : entry.employer;
+  const rest = [isPoint ? entry.role : entry.jobTitle, entry.location, formatResumeDates(entry)].filter(Boolean);
   return `
     <div class="resume-entry" data-id="${entry.id}">
-      <p class="resume-entry-title">${entry.header}</p>
-      <p class="resume-entry-meta">${entry.date}</p>
-      <ul>${bulletTexts.map((b) => `<li>${b}</li>`).join("")}</ul>
+      <p class="resume-entry-title"><span class="resume-org">${org}</span>${rest.length ? ` | ${rest.join(" | ")}` : ""}</p>
+      ${renderBullets(bulletTexts)}
     </div>
   `;
 }
@@ -686,16 +698,16 @@ async function requestResumeRevision(curatedEntries, previousSelection, estimate
       body: JSON.stringify({
         jobDescription: lastJobDescription,
         curatedEntries,
+        resumeOptions,
         revision: {
           previousSelection,
           estimatedPages,
           // Only included when a specific entry causes a wasted-space
-          // page break. A nested Point has a header rather than an
-          // employer/title, so it falls back to that.
+          // page break. Points have an org/role instead of employer/title.
           overflowEntry: overflowEntry
             ? {
-                employer: overflowEntry.employer || overflowEntry.header,
-                jobTitle: overflowEntry.jobTitle || ""
+                employer: overflowEntry.employer || overflowEntry.org,
+                jobTitle: overflowEntry.jobTitle || overflowEntry.role || ""
               }
             : undefined
         }
@@ -715,16 +727,20 @@ let resumeRendered = false;
 let resumeRendering = false;
 
 async function compileResume() {
-  const curatedEntries = lastCuration
+  // Only resume-eligible entries ever reach the resume AI: a Point marked
+  // resumeEligible: false can't end up on the resume, because the model
+  // never sees it — the same structural grounding as the header step.
+  const curatedEntries = (lastCuration
     ? timeline.filter((e) => lastCuration.includedIds.includes(e.id))
-    : timeline;
+    : timeline
+  ).filter((e) => e.type !== "point" || e.resumeEligible !== false);
 
   let selection;
   try {
     const response = await fetch("/api/compile-resume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobDescription: lastJobDescription, curatedEntries })
+      body: JSON.stringify({ jobDescription: lastJobDescription, curatedEntries, resumeOptions })
     });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
     selection = await response.json();
@@ -733,44 +749,59 @@ async function compileResume() {
     selection = lastCuration ? deriveResumeSelectionFromCuration(lastCuration) : resumeSelection;
   }
 
-  // Order matters: bullets/sections must be FINAL before writing a
-  // title/summary that describes them.
+  // Order matters: everything that changes the body's LENGTH (bullets,
+  // Points, expertise, fluency) is final before the two-page fit runs,
+  // and the header is written against that finished body afterward.
   selection = await fitSelectionToTwoPages(selection, curatedEntries);
 
   const data = buildResumeData(selection);
+  const fittedLayout = analyzeLayout(renderResume(data));
   const header = await finalizeResumeHeader(data);
-  data.profile = { ...data.profile, title: header.title };
-  data.executiveProfile = header.executiveProfile;
+  const finalData = { ...data, ...header };
 
-  return renderResume(data);
+  // Safety net: the two-page fit was measured with the baseline profile.
+  // Keep the baseline instead if the tailored one (a) adds a page, or
+  // (b) is LONGER and pushes an entry across the page break. A SHORTER
+  // profile can also shift an entry across the break, but the gap that
+  // leaves is at most the few lines it saved — not worth losing the
+  // tailoring over.
+  const finalLayout = analyzeLayout(renderResume(finalData));
+  const grew = finalData.executiveProfile.length > data.executiveProfile.length;
+  const brokeFit = finalLayout.pages > Math.max(2, fittedLayout.pages)
+    || (grew && finalLayout.overflowEntryId && !fittedLayout.overflowEntryId);
+  if (brokeFit) {
+    console.warn("Tailored executive profile broke the two-page fit — using the baseline profile.");
+    finalData.executiveProfile = data.executiveProfile;
+  }
+
+  return renderResume(finalData);
 }
 
 // Runs ONLY after the body is fully finalized, and is handed ONLY that
-// finished body — never the full career history — so "grounded in
-// what's actually on the resume" is a structural guarantee.
+// finished body — never the full career history — so the tailored
+// profile is grounded in what's actually on the resume. The description
+// and contact line are picked from the options in data.js.
 async function finalizeResumeHeader(data) {
-  const fallback = { title: data.profile.title, executiveProfile: data.executiveProfile };
+  const fallback = {
+    title: profile.descriptionOptions[0],
+    contactLine: profile.contactLineOptions[0],
+    executiveProfile: profile.executiveProfileDefault
+  };
 
-  // A nested Point has a header rather than an employer/title.
   const describe = ({ entry, bulletTexts }) => ({
-    employer: entry.employer || entry.header,
-    jobTitle: entry.jobTitle || "",
+    employer: entry.employer || entry.org,
+    jobTitle: entry.jobTitle || entry.role || "",
     bulletTexts
   });
 
   const finalizedBody = {
     professional: data.professional.map(describe),
-    secondary: {
-      label: data.secondary.label,
-      entries: data.secondary.entries.map(describe)
-    },
-    skillBuckets: data.skillBuckets,
-    featuredPoints: data.featuredPoints.map(({ entry, bulletTexts }) => ({
-      header: entry.header,
-      bodyText: bulletTexts.join("; ")
-    })),
-    defaultTitle: data.profile.title,
-    defaultExecutiveProfile: data.executiveProfile
+    pointsSection: { label: data.pointsSection.label, entries: data.pointsSection.entries.map(describe) },
+    coreExpertise: data.coreExpertise,
+    fluency: data.fluency,
+    descriptionOptions: profile.descriptionOptions,
+    contactLineOptions: profile.contactLineOptions,
+    defaultExecutiveProfile: profile.executiveProfileDefault
   };
 
   try {
@@ -781,8 +812,17 @@ async function finalizeResumeHeader(data) {
     });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);
     const result = await response.json();
-    document.dispatchEvent(new CustomEvent("resume:headerFinalized", { detail: result }));
-    return result;
+    // Defense in depth: the server validates these too, but the browser
+    // re-checks them against data.js before anything reaches the page.
+    const header = {
+      title: profile.descriptionOptions.includes(result.title) ? result.title : fallback.title,
+      contactLine: profile.contactLineOptions.includes(result.contactLine) ? result.contactLine : fallback.contactLine,
+      executiveProfile: typeof result.executiveProfile === "string" && result.executiveProfile.trim()
+        ? result.executiveProfile.trim()
+        : fallback.executiveProfile
+    };
+    document.dispatchEvent(new CustomEvent("resume:headerFinalized", { detail: header }));
+    return header;
   } catch (error) {
     console.error("Resume header finalization failed, using defaults:", error);
     return fallback;

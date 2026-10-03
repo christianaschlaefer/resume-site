@@ -88,3 +88,26 @@ desktop browser and once on a phone:
 - Reaching the end opens the full-screen resume; Back (or Escape)
   returns to the current role; clicking your name in the top-left
   returns to the welcome screen, where "Match to a New Role" appears.
+
+## Resume structure checks (after any change to compile/finalize-resume.js or data.js)
+Compare the compiled resume against the RESUME - BASE template:
+- Name in caps; the Professional Description and Contact Line are word-for-word
+  one of the options in data.js (defaults: "Technical Program & Implementation
+  Leader" and the "Remote / Travel" line). Roles with international,
+  government, defense, or heavy-travel components should tend toward
+  "CONUS / OCONUS".
+- Executive Profile reads as a tailored version of the baseline, about the same
+  length, with no claims that aren't in the baseline or the resume body.
+- Core Expertise uses only listed options, most relevant first, under 350
+  characters, no item cut off mid-phrase.
+- PROFESSIONAL EXPERIENCE uses the two-line heading ("SAP CONCUR | Title", then
+  "Jan. 2022-Present | Location"); every experience appears with at least one
+  bullet (only Embassy Tokyo, as the oldest, may be absent).
+- The Points section header is one of the four options; the campaign always
+  appears there; Points use the one-line heading ("ORG | Role | Date").
+- "Married" and "Became a Father" never appear on the resume (they can appear on
+  the timeline).
+- Technical & Industry Fluency: 2-4 listed lines; no item repeated across lines;
+  sentence lines (Construction, International Experience) are verbatim.
+- Education lines use the "Degree | Institution | Location | Year" format.
+- Still exactly two pages, with no large gap at the bottom of page 1.

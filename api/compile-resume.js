@@ -1,62 +1,25 @@
 // POST /api/compile-resume
-// Body (initial): { jobDescription: string, curatedEntries: [...] }
+// Body (initial):  { jobDescription, curatedEntries, resumeOptions }
 // Body (revision): { ...initial, revision: { previousSelection, estimatedPages, overflowEntry? } }
-// Returns: { experiences: [{ id, section, bullets }], points: [...] }
+// Returns: {
+//   experiences:   [{ id, section, bullets }],
+//   points:        [{ id, bullets }],
+//   pointsHeader:  one of resumeOptions.pointsHeaders,
+//   coreExpertise: items from resumeOptions.coreExpertise, most relevant first,
+//   fluency:       [{ label, items }] — lines from resumeOptions.fluency
+// }
 //
-// Uses FORCED TOOL USE for structured output — see the chat for why.
+// Uses FORCED TOOL USE for structured output, and every "pick from a
+// list" field is an enum built from the candidate's own option lists —
+// the model can choose and order options, never invent new ones. The
+// server re-validates everything anyway, and the browser enforces the
+// character limits, so nothing here relies on the prompt alone.
 //
-// REDESIGNED around a hiring-manager-realistic hierarchy: every
-// experience is included by default (you'd never submit a resume with
-// only one job on it). The PRIMARY lever for fitting two pages is
-// shrinking bullet count/length on lower-priority entries — dropping a
-// whole entry is a last resort, and ONLY the single oldest experience
-// is ever eligible for that (enforced in code, not just requested).
-
-const COMPILE_RESUME_TOOL = {
-  name: "compile_resume_selection",
-  description: "Records the final selection of experiences, their resume section, and their bullet text for a tailored resume.",
-  input_schema: {
-    type: "object",
-    properties: {
-      experiences: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string", description: "The experience's id, exactly as given in the source data." },
-            section: { type: "string", description: "Resume section: \"professional\", or one of this entry's other resumeCategories values for a secondary heading." },
-            bullets: {
-              type: "array",
-              items: { type: "string" },
-              description: "Bullet text, most relevant first. Verbatim, combined, or lightly rewritten from the source achievements only — never a fact, number, or skill not already present there."
-            }
-          },
-          required: ["id", "section", "bullets"]
-        }
-      },
-      points: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string", description: "The Point's id, exactly as given in the source data." },
-            bullets: {
-              type: "array",
-              items: { type: "string" },
-              description: "One or more bullets for this Point, same rules as Experience bullets: verbatim, combined, or lightly rewritten from its source content only."
-            },
-            section: {
-              type: ["string", "null"],
-              description: "If this Point should be NESTED into a real resume section (rendered like a mini-Experience with its own bullets) — \"professional\" or one of its own resumeCategories values. Set to null to leave it as a lightweight single-line \"featured project\" mention instead, which is the right choice for most Points."
-            }
-          },
-          required: ["id", "bullets", "section"]
-        }
-      }
-    },
-    required: ["experiences", "points"]
-  }
-};
+// Hierarchy (unchanged): every experience appears, in the section the
+// candidate's data assigns it, with at least one bullet — only the
+// single oldest may be dropped, and only when it's unrelated and space
+// is needed. Bullet count/length is the primary lever for fitting two
+// pages. Optional Points are added only where they strengthen the case.
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -71,22 +34,36 @@ module.exports = async function handler(req, res) {
   if (JSON.stringify(req.body || {}).length > 200000) {
     return res.status(400).json({ error: "Payload too large" });
   }
-  const { jobDescription, curatedEntries, revision } = req.body || {};
+  const { jobDescription, curatedEntries, resumeOptions, revision } = req.body || {};
   if (!Array.isArray(curatedEntries) || curatedEntries.length === 0 || curatedEntries.length > 100) {
     return res.status(400).json({ error: "Invalid curatedEntries payload" });
   }
   if (jobDescription != null && (typeof jobDescription !== "string" || jobDescription.length > 5000)) {
     return res.status(400).json({ error: "Invalid job description" });
   }
+  const options = sanitizeOptions(resumeOptions);
+  if (!options) {
+    return res.status(400).json({ error: "Invalid resumeOptions payload" });
+  }
   // ------------------------------------------------------------------
 
-  const mostRecentId = getMostRecentExperienceId(curatedEntries);
-  const oldestId = getOldestExperienceId(curatedEntries);
+  const experiences = curatedEntries.filter((e) => e && e.type === "experience" && e.dates);
+  // Belt and braces: the browser never sends timeline-only Points, but
+  // the server refuses them too.
+  const points = curatedEntries.filter((e) => e && e.type === "point" && e.resumeEligible !== false);
+  const ctx = {
+    experiences,
+    points,
+    options,
+    mostRecentId: getMostRecentExperienceId(experiences),
+    oldestId: getOldestExperienceId(experiences)
+  };
 
   try {
+    const tool = buildTool(options, experiences.map((e) => e.id), points.map((p) => p.id));
     const promptContent = revision
-      ? buildRevisionPrompt(jobDescription, curatedEntries, revision, mostRecentId, oldestId)
-      : buildInitialPrompt(jobDescription, curatedEntries, mostRecentId, oldestId);
+      ? buildRevisionPrompt(jobDescription, revision, ctx)
+      : buildInitialPrompt(jobDescription, ctx);
 
     const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -98,7 +75,7 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         model: "claude-sonnet-5",
         max_tokens: 16000,
-        tools: [COMPILE_RESUME_TOOL],
+        tools: [tool],
         tool_choice: { type: "tool", name: "compile_resume_selection" },
         messages: [{ role: "user", content: promptContent }]
       })
@@ -109,151 +86,306 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await anthropicResponse.json();
-    const selection = extractSelection(data, curatedEntries, mostRecentId, oldestId);
-    console.log(`compile-resume: ${revision ? "revision" : "initial"} succeeded with ${selection.experiences.length} experiences`);
+    const selection = extractSelection(data, ctx);
+    console.log(`compile-resume: ${revision ? "revision" : "initial"} succeeded with ${selection.experiences.length} experiences, ${selection.points.length} points, header "${selection.pointsHeader}"`);
     return res.status(200).json(selection);
   } catch (error) {
     console.error("Resume compilation failed:", error);
+    // A failed REVISION falls back to the previous complete draft rather
+    // than something mechanical — a real resume that's slightly long beats
+    // discarding it.
     if (revision && revision.previousSelection) {
       return res.status(200).json(revision.previousSelection);
     }
-    return res.status(200).json(mechanicalFallback(curatedEntries));
+    return res.status(200).json(mechanicalFallback(ctx));
   }
 };
 
-function buildInitialPrompt(jobDescription, curatedEntries, mostRecentId, oldestId) {
+// ------------------------------------------------------------
+// Option lists arrive from the browser (data.js is the single source
+// of truth), so they're validated like any other input.
+// ------------------------------------------------------------
+function sanitizeOptions(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const strings = (arr, max) => (Array.isArray(arr) ? arr : [])
+    .filter((s) => typeof s === "string" && s.trim() && s.length <= 400)
+    .slice(0, max);
+  const pointsHeaders = [...new Set(strings(raw.pointsHeaders, 12))];
+  const coreExpertise = [...new Set(strings(raw.coreExpertise, 80))];
+  const fluency = (Array.isArray(raw.fluency) ? raw.fluency : [])
+    .filter((line) => line && typeof line.label === "string" && line.label.trim() && line.label.length <= 120)
+    .slice(0, 20)
+    .map((line) => ({
+      label: line.label,
+      items: [...new Set(strings(line.items, 60))],
+      text: typeof line.text === "string" ? line.text.slice(0, 800) : ""
+    }))
+    .filter((line) => line.items.length || line.text);
+  if (!pointsHeaders.length || !coreExpertise.length || !fluency.length) return null;
+  const limit = (value, fallback, max) => (Number.isFinite(value) && value > 0 ? Math.min(value, max) : fallback);
+  return {
+    pointsHeaders,
+    coreExpertise,
+    fluency,
+    coreExpertiseMaxChars: limit(raw.coreExpertiseMaxChars, 350, 1000),
+    fluencyLineMaxChars: limit(raw.fluencyLineMaxChars, 350, 1000),
+    fluencyMaxLines: limit(raw.fluencyMaxLines, 4, 8)
+  };
+}
+
+function buildTool(options, experienceIds, pointIds) {
+  const bulletList = {
+    type: "array",
+    items: { type: "string" },
+    description: "Bullet text, most relevant first. Verbatim, combined, or rewritten from this entry's own source content only — never a fact, number, or skill not already present there."
+  };
+  return {
+    name: "compile_resume_selection",
+    description: "Records the body of a tailored two-page resume: bullets per experience, the optional Points chosen, the Points section header, Core Expertise, and Technical & Industry Fluency lines.",
+    input_schema: {
+      type: "object",
+      properties: {
+        experiences: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { id: { type: "string", enum: experienceIds }, bullets: bulletList },
+            required: ["id", "bullets"]
+          }
+        },
+        points: pointIds.length
+          ? {
+              type: "array",
+              items: {
+                type: "object",
+                properties: { id: { type: "string", enum: pointIds }, bullets: bulletList },
+                required: ["id", "bullets"]
+              }
+            }
+          : { type: "array", maxItems: 0, items: { type: "object" } },
+        pointsHeader: {
+          type: "string",
+          enum: options.pointsHeaders,
+          description: "Header for the Points section — whichever option best describes everything that will appear in it."
+        },
+        coreExpertise: {
+          type: "array",
+          items: { type: "string", enum: options.coreExpertise },
+          description: "Core Expertise items, most relevant first."
+        },
+        fluency: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", enum: options.fluency.map((line) => line.label) },
+              items: {
+                type: "array",
+                items: { type: "string" },
+                description: "For list lines: that line's own items, most relevant first. Leave empty for sentence lines."
+              }
+            },
+            required: ["label"]
+          }
+        }
+      },
+      required: ["experiences", "points", "pointsHeader", "coreExpertise", "fluency"]
+    }
+  };
+}
+
+function describeOptions(options) {
+  const fluency = options.fluency.map((line) => (line.text
+    ? { label: line.label, kind: "sentence (use verbatim or omit)", text: line.text }
+    : { label: line.label, kind: "list (choose and order items)", items: line.items }));
+  return JSON.stringify({
+    pointsHeaders: options.pointsHeaders,
+    coreExpertise: options.coreExpertise,
+    fluency
+  });
+}
+
+function sharedRules(ctx) {
+  const o = ctx.options;
   return (
-    "You are compiling a two-page professional resume from already-curated career data, for a specific job application, from the perspective of a hiring manager.\n\n" +
-    `Job context:\n"""\n${(jobDescription || "").trim()}\n"""\n\n` +
-    "Curated Experience and Point entries to work from (JSON):\n" +
-    JSON.stringify(curatedEntries) +
-    "\n\n" +
-    "Rules:\n" +
-    "- Include EVERY Experience entry above. A real candidate would never submit a resume showing only one job — the full work history belongs on the page, exactly like it does on a normal resume.\n" +
-    `- The ONLY exception: the single oldest experience (id: "${oldestId}") MAY be dropped entirely, but ONLY if it is genuinely unrelated to this specific role. Every other experience, including but not limited to the most recent one (id: "${mostRecentId}"), MUST appear with at least one bullet, no exceptions.\n` +
-    "- To manage space, your PRIMARY lever is bullet count and length, not omission: give fewer and shorter bullets to less-relevant or older entries, and more/richer bullets to highly relevant or recent ones. A highly relevant, senior, or current role can reasonably warrant 5-7 strong bullets; a less central entry might need just one — but it still needs that one.\n" +
-    "- Fill the available two pages well — a sparse, mostly-empty page looks worse than a fully-used one. If the content doesn't naturally fill two pages, that's a signal to include MORE bullets on your more relevant entries, not to leave space empty.\n" +
-    '- Decide which ONE secondary heading (if any) best fits this job, drawn from whichever categories appear in these entries\' resumeCategories besides "professional" (e.g. "leadership", "internationalGovernment", "selected"). Use at most one secondary heading across the whole resume, and never place the same entry in two sections.\n' +
-    "- Bullets may be copied verbatim, combined, OR REWRITTEN to emphasize what's most relevant to THIS specific role — rephrasing for emphasis is encouraged. The one hard limit: never introduce a fact, number, or skill that isn't already present somewhere in that entry's own achievements/overview.\n" +
-    "- Within each entry, list bullets in descending order of relevance to this role — most relevant first.\n" +
-    "- For each Point entry, decide independently: does it have enough substance and relevance to this role to be NESTED into a real section (like a mini-Experience, with its own bullets, under \"professional\" or one of its own resumeCategories)? Or is it better left as a lightweight single-line mention (section: null)? Most Points should stay a simple mention — nesting is for the rare case where a Point's content is genuinely as substantial and relevant as a real work experience for THIS role. Never nest a Point whose resumeCategories don't include the section you're placing it in."
+    "THE RESUME'S FIXED STRUCTURE: name, professional description, contact line, EXECUTIVE PROFILE (all handled separately) → CORE EXPERTISE → PROFESSIONAL EXPERIENCE → the Points section (header chosen by you) → TECHNICAL & INDUSTRY FLUENCY → EDUCATION (static). You are deciding the body.\n\n" +
+    "EXPERIENCES\n" +
+    "- Each Experience's resumeSection is fixed by the candidate: \"professional\" renders under PROFESSIONAL EXPERIENCE, \"points\" renders in the Points section. You don't choose or change this.\n" +
+    "- Include EVERY Experience. A real candidate never submits a resume with gaps in their work history.\n" +
+    `- The ONLY exception: the single oldest experience (id: "${ctx.oldestId}") MAY be dropped entirely, but only if it's genuinely unrelated to this role AND trimming bullets elsewhere can't make room. Every other experience, including the most recent (id: "${ctx.mostRecentId}"), MUST appear with at least one bullet.\n` +
+    `- The most recent experience (id: "${ctx.mostRecentId}") represents the candidate's current standing and should usually carry the most content — a highly relevant current role can reasonably warrant 5-7 strong bullets.\n\n` +
+    "POINTS (optional extras)\n" +
+    "- Include a Point only when it genuinely strengthens this candidacy for THIS role — leadership, technical, or community evidence a hiring manager would value. Leave out anything unrelated or distracting.\n" +
+    "- Every included Point needs at least one bullet. Included Points appear in the Points section alongside any Experiences fixed there.\n\n" +
+    "POINTS SECTION HEADER\n" +
+    `- Choose the option that best describes EVERYTHING that will appear in that section for this role, including Experiences fixed to it. If unsure, use the first option ("${o.pointsHeaders[0]}").\n\n` +
+    "CORE EXPERTISE\n" +
+    `- Choose items only from the provided list, verbatim, most relevant to this role first. Aim to fill close to ${o.coreExpertiseMaxChars} characters when joined with " | ", without exceeding it.\n\n` +
+    "TECHNICAL & INDUSTRY FLUENCY\n" +
+    `- Choose the 2-${o.fluencyMaxLines} lines most relevant to this role, most relevant first.\n` +
+    `- For a list line, choose and order that line's own items (verbatim), at most ${o.fluencyLineMaxChars} characters per line. A sentence line is included exactly as written or omitted — never rewritten.\n` +
+    "- Don't repeat the same item in two lines.\n\n" +
+    "BULLETS\n" +
+    "- Bullets may be copied verbatim, combined, or rewritten to emphasize what's most relevant to THIS role. The one hard limit: never introduce a fact, number, or skill not already present in that entry's own source content.\n" +
+    "- Within each entry, order bullets most relevant first.\n\n" +
+    "SPACE\n" +
+    "- The finished resume must fit two pages and should fill them well — a mostly-empty page looks worse than a full one. Your primary lever is bullet count and length on less central entries.\n\n" +
+    "OPTION LISTS (JSON):\n" + describeOptions(o)
   );
 }
 
-function buildRevisionPrompt(jobDescription, curatedEntries, revision, mostRecentId, oldestId) {
+function buildInitialPrompt(jobDescription, ctx) {
+  return (
+    "You are compiling the body of a two-page professional resume from already-curated career data, for a specific job application, from the perspective of a hiring manager.\n\n" +
+    `Job context:\n"""\n${(jobDescription || "").trim()}\n"""\n\n` +
+    "Curated Experiences and Points (JSON):\n" +
+    JSON.stringify([...ctx.experiences, ...ctx.points]) +
+    "\n\n" + sharedRules(ctx)
+  );
+}
+
+function buildRevisionPrompt(jobDescription, revision, ctx) {
   const overflowNote = revision.overflowEntry
-    ? `\n\nSPECIFIC ISSUE: the entry "${revision.overflowEntry.employer} | ${revision.overflowEntry.jobTitle}" currently has bullets that overflow onto the next page, which forces that ENTIRE entry to move to the next page and leaves significant blank space at the bottom of the previous one. Shorten THIS entry's bullets specifically (fewer and/or more concise) so it fits completely within the current page — this is the most important fix to make.\n`
+    ? `\n\nSPECIFIC ISSUE: the entry "${revision.overflowEntry.employer}${revision.overflowEntry.jobTitle ? ` | ${revision.overflowEntry.jobTitle}` : ""}" currently straddles the page break, which forces that ENTIRE entry onto the next page and leaves blank space at the bottom of the previous one. Shorten THIS entry's bullets (fewer and/or more concise) so it fits within the current page — this is the most important fix to make.`
     : "";
   return (
-    "You previously compiled a resume draft for this job application, but it needs adjustment to fit two pages cleanly. Revise it HOLISTICALLY, using your own editorial judgment about what matters most to this specific resume's effectiveness." +
+    "You previously compiled a resume body for this job application, but it needs adjustment to fit two pages cleanly. Revise it HOLISTICALLY, using your own editorial judgment about what matters most to this resume's effectiveness." +
     overflowNote +
-    `\n\nJob context:\n"""\n${(jobDescription || "").trim()}\n"""\n\n` +
-    "Original source entries, for reference (JSON):\n" +
-    JSON.stringify(curatedEntries) +
-    "\n\n" +
-    "Your previous draft (JSON):\n" +
+    `\n\nThe current draft is estimated at about ${revision.estimatedPages} pages and must fit cleanly within 2.\n\n` +
+    "Levers, in order of preference: tighten wording without losing substance; trim bullets on the entries least central to this role; drop the weakest optional Points; trim lower-priority Core Expertise items or Fluency items/lines. If you're only slightly over, prefer trimming a few words over deleting a strong bullet. Never drop an Experience other than the single oldest one.\n\n" +
+    `Job context:\n"""\n${(jobDescription || "").trim()}\n"""\n\n` +
+    "Original curated entries, for reference (JSON):\n" +
+    JSON.stringify([...ctx.experiences, ...ctx.points]) +
+    "\n\nYour previous draft (JSON):\n" +
     JSON.stringify(revision.previousSelection) +
-    "\n\n" +
-    `This draft is currently estimated at approximately ${revision.estimatedPages} pages and must fit cleanly within 2.\n\n` +
-    "Your PRIMARY lever is tightening wording and reducing bullet count on whichever entries YOU judge least central to this specific role — based on genuine relevance, not entry length. If you're only slightly over, prefer trimming a few words here and there over deleting a whole bullet outright.\n\n" +
-    "Hard constraints that still apply:\n" +
-    `- Every experience must remain with at least one bullet, EXCEPT the single oldest entry (id: "${oldestId}"), which may be dropped entirely only if genuinely unrelated to this role and bullet-trimming alone isn't enough to fit.\n` +
-    `- The most recent employment entry (id: "${mostRecentId}") must remain, with at least one bullet.\n` +
-    "- Never introduce a fact, number, or skill not already present in the original source entries.\n" +
-    '- If a Point is currently nested into a section, consider whether un-nesting it (section: null) is actually the right tightening move here — a nested Point competes for the same page space as a real Experience.'
+    "\n\n" + sharedRules(ctx)
   );
 }
 
-// Among Experience entries only — "present" always outranks a dated end.
-function getMostRecentExperienceId(entries) {
-  const experiences = entries.filter((e) => e.type === "experience");
-  let best = experiences[0];
-  experiences.forEach((e) => {
-    if (getSortableEndDate(e) > getSortableEndDate(best)) best = e;
-  });
-  return best ? best.id : null;
-}
-
-// The earliest-starting experience — the only one ever eligible to be
-// dropped entirely, per the hierarchy above.
-function getOldestExperienceId(entries) {
-  const experiences = entries.filter((e) => e.type === "experience");
-  let oldest = experiences[0];
-  experiences.forEach((e) => {
-    if (new Date(`${e.dates.start}-01`).getTime() < new Date(`${oldest.dates.start}-01`).getTime()) {
-      oldest = e;
-    }
-  });
-  return oldest ? oldest.id : null;
-}
+// ------------------------------------------------------------
+// Validation & enforcement
+// ------------------------------------------------------------
 
 function getSortableEndDate(entry) {
   if (entry.dates.end === "present") return Infinity;
   return new Date(`${entry.dates.end}-01`).getTime();
 }
 
-function extractSelection(apiResponse, curatedEntries, mostRecentId, oldestId) {
-  const toolUseBlock = apiResponse.content.find((block) => block.type === "tool_use");
+// Among Experience entries only — "present" always outranks a dated end.
+function getMostRecentExperienceId(experiences) {
+  let best = null;
+  experiences.forEach((e) => {
+    if (!best || getSortableEndDate(e) > getSortableEndDate(best)) best = e;
+  });
+  return best ? best.id : null;
+}
+
+// The earliest-starting experience — the only one ever eligible to be dropped.
+function getOldestExperienceId(experiences) {
+  let oldest = null;
+  experiences.forEach((e) => {
+    if (!oldest || new Date(`${e.dates.start}-01`) < new Date(`${oldest.dates.start}-01`)) oldest = e;
+  });
+  return oldest ? oldest.id : null;
+}
+
+const sectionOf = (entry) => (entry.resumeSection === "points" ? "points" : "professional");
+
+function cleanBullets(bullets) {
+  return (Array.isArray(bullets) ? bullets : [])
+    .filter((b) => typeof b === "string" && b.trim())
+    .map((b) => b.trim())
+    .slice(0, 12);
+}
+
+function extractSelection(apiResponse, ctx) {
+  // Forced tool use: the structured data arrives already parsed in the
+  // tool_use block's `input` — no text parsing, so no "preamble before
+  // the JSON" failure mode at all.
+  const toolUseBlock = (apiResponse.content || []).find((block) => block.type === "tool_use");
   if (!toolUseBlock) {
     const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
     console.error(`compile-resume: no tool_use block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
-    return mechanicalFallback(curatedEntries);
+    return mechanicalFallback(ctx);
   }
-  const parsed = toolUseBlock.input;
-  if (!Array.isArray(parsed.experiences)) {
-    console.error("compile-resume: tool_use input missing experiences array:", JSON.stringify(parsed).slice(0, 300));
-    return mechanicalFallback(curatedEntries);
+  const raw = toolUseBlock.input || {};
+  if (!Array.isArray(raw.experiences)) {
+    console.error("compile-resume: tool_use input missing experiences array:", JSON.stringify(raw).slice(0, 300));
+    return mechanicalFallback(ctx);
   }
-  if (!Array.isArray(parsed.points)) {
-    parsed.points = []; // malformed/missing points shouldn't sink an otherwise-valid experiences array
-  }
-  return enforceAllExperiencesPresent(parsed, curatedEntries, oldestId);
-}
 
-// Code-level guarantee: every experience except the single oldest one
-// MUST appear with at least one bullet, regardless of whether the model
-// followed the prompt instructions above. This generalizes what used to
-// be a "most recent only" guarantee to the full hierarchy from the chat:
-// dropping is a last resort, and only ever for the oldest entry.
-function enforceAllExperiencesPresent(selection, curatedEntries, oldestId) {
-  const allExperienceIds = curatedEntries.filter((e) => e.type === "experience").map((e) => e.id);
-  let experiences = [...selection.experiences];
-
-  allExperienceIds.forEach((id) => {
-    if (id === oldestId) return; // the one entry allowed to be absent
-    const present = experiences.some((e) => e.id === id && e.bullets && e.bullets.length > 0);
-    if (present) return;
-
-    const sourceEntry = curatedEntries.find((e) => e.id === id);
-    if (!sourceEntry) return;
-    experiences = experiences.filter((e) => e.id !== id); // drop any zero-bullet stub first
-    experiences.push({
-      id,
-      section: (sourceEntry.resumeCategories && sourceEntry.resumeCategories[0]) || "professional",
-      bullets: (sourceEntry.achievements || []).slice(0, 1)
-    });
+  // Experiences: only real curated ids, once each, section from the DATA.
+  const experienceById = new Map(ctx.experiences.map((e) => [e.id, e]));
+  const seen = new Set();
+  const experiences = [];
+  raw.experiences.forEach((sel) => {
+    const entry = sel && experienceById.get(sel.id);
+    if (!entry || seen.has(entry.id)) return;
+    seen.add(entry.id);
+    experiences.push({ id: entry.id, section: sectionOf(entry), bullets: cleanBullets(sel.bullets) });
   });
 
+  // Points: only curated, resume-eligible ids, each with real bullets.
+  const pointById = new Map(ctx.points.map((p) => [p.id, p]));
+  const points = [];
+  (Array.isArray(raw.points) ? raw.points : []).forEach((sel) => {
+    const entry = sel && pointById.get(sel.id);
+    if (!entry || seen.has(entry.id)) return;
+    const bullets = cleanBullets(sel.bullets);
+    if (!bullets.length) return;
+    seen.add(entry.id);
+    points.push({ id: entry.id, bullets });
+  });
+
+  const o = ctx.options;
+  const pointsHeader = o.pointsHeaders.includes(raw.pointsHeader) ? raw.pointsHeader : o.pointsHeaders[0];
+  const coreOptions = new Set(o.coreExpertise);
+  const coreExpertise = [...new Set((Array.isArray(raw.coreExpertise) ? raw.coreExpertise : []).filter((s) => coreOptions.has(s)))];
+
+  const lineByLabel = new Map(o.fluency.map((line) => [line.label, line]));
+  const usedLabels = new Set();
+  const fluency = [];
+  (Array.isArray(raw.fluency) ? raw.fluency : []).forEach((sel) => {
+    const line = sel && lineByLabel.get(sel.label);
+    if (!line || usedLabels.has(line.label)) return;
+    usedLabels.add(line.label);
+    if (line.text) {
+      fluency.push({ label: line.label, items: [] }); // sentence lines always render verbatim
+      return;
+    }
+    const allowed = new Set(line.items);
+    const items = [...new Set((Array.isArray(sel.items) ? sel.items : []).filter((item) => allowed.has(item)))];
+    fluency.push({ label: line.label, items });
+  });
+
+  return enforceAllExperiencesPresent({ experiences, points, pointsHeader, coreExpertise, fluency }, ctx);
+}
+
+// Code-level guarantee: every experience except the single oldest MUST
+// appear with at least one bullet, whatever the model returned.
+function enforceAllExperiencesPresent(selection, ctx) {
+  let experiences = [...selection.experiences];
+  ctx.experiences.forEach((source) => {
+    if (source.id === ctx.oldestId) return; // the one entry allowed to be absent
+    const present = experiences.some((e) => e.id === source.id && e.bullets.length > 0);
+    if (present) return;
+    experiences = experiences.filter((e) => e.id !== source.id); // drop any zero-bullet stub first
+    experiences.push({ id: source.id, section: sectionOf(source), bullets: (source.achievements || []).slice(0, 1) });
+  });
+  // The oldest may be omitted, but never shown with zero bullets.
+  experiences = experiences.filter((e) => e.bullets.length > 0);
   return { ...selection, experiences };
 }
 
-// Same mechanical rule the client-side mock used: every experience
-// included, first eligible category, every bullet verbatim. Used only
-// on a totally failed INITIAL call, so the resume still renders
-// something correct rather than nothing at all.
-function mechanicalFallback(curatedEntries) {
-  const experiences = curatedEntries
-    .filter((e) => e.type === "experience")
-    .map((e) => ({
-      id: e.id,
-      section: (e.resumeCategories && e.resumeCategories[0]) || "professional",
-      bullets: e.achievements || []
-    }));
-  // Conservative on purpose: section always null here, meaning every
-  // Point stays a simple featured mention — nesting is a judgment call,
-  // and this fallback only runs when the real judgment call failed.
-  const points = curatedEntries
-    .filter((e) => e.type === "point")
-    .map((e) => ({ id: e.id, bullets: e.bullets || [], section: null }));
-  return { experiences, points };
+// Used only when the real call fails outright: every experience with all
+// its bullets, no optional Points, and empty expertise/fluency lists that
+// the browser fills with the defaults from data.js.
+function mechanicalFallback(ctx) {
+  return {
+    experiences: ctx.experiences.map((e) => ({ id: e.id, section: sectionOf(e), bullets: e.achievements || [] })),
+    points: [],
+    pointsHeader: ctx.options.pointsHeaders[0],
+    coreExpertise: [],
+    fluency: []
+  };
 }

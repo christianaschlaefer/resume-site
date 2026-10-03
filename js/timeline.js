@@ -175,9 +175,10 @@ const Timeline = (() => {
     journey.sort((a, b) => a.startIdx - b.startIdx || a.lane - b.lane);
     journey.forEach((j, i) => { j.color = j.entry.color || PALETTE[i % PALETTE.length]; });
     journey.forEach((j) => {
-      j.hasConcurrent = journey.some(
+      j.concurrents = journey.filter(
         (o) => o !== j && o.lane !== j.lane && o.startIdx < j.effEndIdx && o.effEndIdx > j.startIdx
       );
+      j.sharing = false;
     });
 
     const marks = [];
@@ -349,12 +350,16 @@ const Timeline = (() => {
     return {
       vw, th, narrow, cardW, playheadX,
       pxPerMonth: narrow ? 30 : clamp(vw / 20, 40, 72),
+      // On a phone the playhead hugs the left edge, so a Point revealed
+      // exactly there would be born half off-screen. Narrow screens reveal
+      // Points mid-screen instead, with cards extending right of their dot.
+      revealLead: narrow ? Math.round(vw * 0.45) : REVEAL_LEAD_PX,
       minItemW: cardW + Math.max(96, Math.round(cardW * 0.35)),
       leadIn: playheadX + (narrow ? 40 : 72),
       tail: Math.round(cardW * 0.5) + 56,
       laneGap: 16,
       pointCardW: narrow ? 200 : 232,
-      pointCardH: 76,
+      pointCardH: 96,
       tierGap: 12,
       stemBase: 30,
       axisGap: 46,
@@ -373,7 +378,8 @@ const Timeline = (() => {
     const pts = [...mdl.points].sort((a, b) => a.idx - b.idx);
     pts.forEach((p) => {
       p.x = scale.toX(p.idx);
-      let left = Math.max(p.x - m.pointCardW / 2, Math.min(8, p.x - 18));
+      const anchored = m.narrow ? p.x - 14 : p.x - m.pointCardW / 2;
+      let left = Math.max(anchored, Math.min(8, p.x - 18));
       let tier = -1;
       for (let t = 0; t < maxTiers; t++) {
         if (lastRight[t] === undefined || left >= lastRight[t] + 12) { tier = t; break; }
@@ -395,7 +401,7 @@ const Timeline = (() => {
 
   function tierCap(m) {
     const room = m.th - (m.laneTopMin + m.minLaneH + m.axisGap) - m.stemBase - m.pointCardH - 16;
-    return clamp(Math.floor(room / (m.pointCardH + m.tierGap)) + 1, 1, m.narrow ? 2 : 3);
+    return clamp(Math.floor(room / (m.pointCardH + m.tierGap)) + 1, 1, 3);
   }
 
   // Vertical budget, top to bottom: card lane → playhead stem → axis →
@@ -466,19 +472,30 @@ const Timeline = (() => {
       // sticking at exactly the same moments as the main lane's would.
       j.dx = model.wideLanes ? j.lane * (m.cardW + m.laneGap) : 0;
       const localLeft = j.x0 - model.timelineLeft;
+      // A sticky card must be fully pushed out by the time its wrapper
+      // ends — so an ongoing role, whose period ends at Today, would start
+      // sliding away a card-width BEFORE Today, right where the newest
+      // content lives. Its wrapper extends through the tail instead, so the
+      // current role stays pinned until the resume takes over.
+      j.stickEnd = j.x1 + (j.present ? m.cardW + m.tail : 0);
       j.wrapEl.style.left = `${localLeft + j.dx}px`;
-      j.wrapEl.style.width = `${Math.max(m.cardW, j.x1 - j.x0)}px`;
+      j.wrapEl.style.width = `${Math.max(m.cardW, j.stickEnd - j.x0)}px`;
       j.cardEl.style.left = `${m.playheadX + j.dx}px`;
       j.wrapEl.classList.toggle("is-stacked-secondary", !model.wideLanes && j.lane > 0);
       // The main lane renders above secondary lanes, so a concurrent card
       // that slides left as its period ends tucks BEHIND the main card
       // instead of painting over it.
       j.wrapEl.classList.toggle("is-secondary-lane", j.lane > 0);
-      if (!model.wideLanes && j.lane === 0 && j.hasConcurrent) {
-        j.cardEl.style.setProperty("--card-max", `${Math.max(140, v.laneH - m.compactH - 14)}px`);
+      // On stacked (narrow) layouts, a main-lane card makes room for a
+      // compact concurrent card above it — but only while that concurrent
+      // card is actually on screen (toggled per frame in update()).
+      if (!model.wideLanes && j.lane === 0 && j.concurrents.length) {
+        j.cardEl.style.setProperty("--card-max-shared", `${Math.max(140, v.laneH - m.compactH - 14)}px`);
       } else {
-        j.cardEl.style.removeProperty("--card-max");
+        j.cardEl.style.removeProperty("--card-max-shared");
       }
+      j.sharing = false;
+      j.cardEl.classList.remove("is-sharing");
       j.segEl.style.left = `${localLeft}px`;
       j.segEl.style.width = `${Math.max(4, j.x1 - j.x0)}px`;
       j.segEl.style.setProperty("--lane", j.lane);
@@ -565,9 +582,11 @@ const Timeline = (() => {
     const isEdu = j.kind === "education";
     const title = isEdu ? e.degree : e.jobTitle;
     const org = isEdu ? e.institution : e.employer;
-    const dates = isEdu
-      ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}`
-      : `${formatDate(e.dates.start)} – ${formatDate(e.dates.end)}`;
+    const dates = e.dateText
+      ? e.dateText
+      : isEdu
+        ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}`
+        : `${formatDate(e.dates.start)} – ${formatDate(e.dates.end)}`;
     const meta = [dates, e.location].filter(Boolean).join(" · ");
     const items = (isEdu ? e.bullets : e.achievements) || [];
     const eyebrow = isEdu ? "Education" : j.lane > 0 ? "Concurrent role" : j.present ? "Current role" : "Experience";
@@ -614,12 +633,14 @@ const Timeline = (() => {
     // `bodyText` fallback keeps any older single-paragraph Points working.
     const bullets = e.bullets || (e.bodyText ? [e.bodyText] : []);
     const listId = `point-list-${id}`;
+    const title = e.org || e.header || "";
     // The date is deliberately NOT displayed — it only positions the Point.
     return `
       <span class="point-dot" aria-hidden="true"></span>
       <span class="point-stem" aria-hidden="true"></span>
       <article class="point-card" aria-labelledby="point-title-${id}">
-        <h3 class="point-title" id="point-title-${id}">${e.header}</h3>
+        <h3 class="point-title" id="point-title-${id}">${title}</h3>
+        ${e.role ? `<p class="point-role">${e.role}</p>` : ""}
         ${bullets.length ? `
           <ul class="card-list point-list" id="${listId}" data-expand-region aria-hidden="true" inert>${bullets.map((b) => `<li>${linkifyDetails(b, e.details)}</li>`).join("")}</ul>
           <button class="card-toggle" type="button" aria-expanded="false" aria-controls="${listId}" data-label-closed="Explore" data-label-open="Close"><span class="toggle-label">Explore</span>${CHEVRON}</button>` : ""}
@@ -750,7 +771,7 @@ const Timeline = (() => {
       if (passed) nextReached.push(s.id);
     });
     model.points.forEach((p) => {
-      const revealed = playhead >= model.timelineLeft + p.x - REVEAL_LEAD_PX;
+      const revealed = playhead >= model.timelineLeft + p.x - m.revealLead;
       if (revealed !== p.revealed) {
         p.revealed = revealed;
         p.el.classList.toggle("is-revealed", revealed);
@@ -773,7 +794,7 @@ const Timeline = (() => {
     model.journey.forEach((j) => {
       const stick = m.playheadX + j.dx;
       const natural = j.x0 + j.dx - scrollLeft;
-      const end = j.x1 + j.dx - scrollLeft;
+      const end = j.stickEnd + j.dx - scrollLeft;
       const left = Math.min(Math.max(natural, stick), end - m.cardW);
       let opacity = 1;
       if (natural > stick) {
@@ -793,6 +814,21 @@ const Timeline = (() => {
         j.cardEl.classList.toggle("is-gone", opacity < 0.05);
       }
     });
+
+    // Stacked layouts: cap a main-lane card's height only while one of its
+    // concurrent cards is on screen, so its overview isn't squeezed for
+    // the whole period just because a side role overlapped part of it.
+    if (!model.wideLanes) {
+      const onScreen = (o) => o.x0 + o.dx - scrollLeft < m.vw && o.stickEnd + o.dx - scrollLeft > 0;
+      model.journey.forEach((j) => {
+        if (j.lane !== 0 || !j.concurrents.length) return;
+        const sharing = j.concurrents.some(onScreen);
+        if (sharing !== j.sharing) {
+          j.sharing = sharing;
+          j.cardEl.classList.toggle("is-sharing", sharing);
+        }
+      });
+    }
 
     // An expanded Point or station closes once it scrolls out of view.
     if (expanded && (expanded.item.kind === "point" || expanded.item.kind === "station")) {
