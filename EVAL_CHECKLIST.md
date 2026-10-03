@@ -67,3 +67,24 @@ this is now the ONLY thing curate-timeline actually decides.
   the specific resume's emphasis.
 - No parse-failure, "no tool_use block," or fallback error lines for
   any of the three functions.
+
+## Timeline interaction checks (after any change to timeline.js or style.css)
+Open the live site with `?debug=true` and run through these once on a
+desktop browser and once on a phone:
+- Wheel/trackpad scrolling DOWN moves the timeline RIGHT; arrow keys,
+  Page Up/Down, Home/End, and the ‹ › buttons all move through time.
+- Each role's card stays pinned at the playhead for its whole period,
+  then gets bumped out by the next one. The date chip tracks the date.
+- Overlapping roles (e.g. the campaign inside SAP Concur) show side by
+  side on desktop and stacked on a phone — never painted over each other.
+- Skills pop into the dock when a role is reached, upgrade (×2) on
+  repeats, and retract when scrolling back past that role.
+- Points stay as dots until the playhead reaches them, then their card
+  drops down on a leader line. No date is shown on a Point card.
+- Degrees sit on the line as stations; clicking one opens its card.
+- Opening any card dims everything else; scrolling past its period (or
+  pressing Escape) closes it. Wheeling over a long expanded card scrolls
+  the card, not the timeline.
+- Reaching the end opens the full-screen resume; Back (or Escape)
+  returns to the current role; clicking your name in the top-left
+  returns to the welcome screen, where "Match to a New Role" appears.

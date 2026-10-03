@@ -5,6 +5,23 @@
 // where real content had to be restructured, approximated, or
 // attributed to fit this schema, and genuinely deserve a read-through
 // before this goes live for real applications.
+//
+// HOW EACH TYPE APPEARS ON THE TIMELINE (see js/timeline.js)
+//   experience — a period drawn to time scale on the central line; its
+//                card rides along at the playhead for the whole period.
+//                Optional fields:
+//                  concurrent: true  — a side role (e.g. a campaign held
+//                                      alongside a job). Gets placed in a
+//                                      secondary lane instead of competing
+//                                      with the main career thread.
+//                  color: "#hex"     — override the auto-assigned accent.
+//   point      — optional extra, branching below the line. `date` only
+//                positions it; it is never displayed.
+//   education  — (separate array below) with only `year`: a "station"
+//                sitting on the line. Add `start: "YYYY-MM"` (and
+//                optionally `end`) to render it as a full period instead.
+// Overlapping periods are handled automatically; the flags above only
+// tell the timeline which one is the "main" thread.
 // ============================================================
 
 const timeline = [
@@ -159,14 +176,26 @@ const timeline = [
     // REVIEW: no date was given in the original resume for this
     // project — placeholder, please correct.
     date: "2026-01",
-    bodyText: "Built a local LLM-assisted prototype that compares ERP source schemas with target integration templates, retrieves relevant technical documentation, and generates source-grounded field-mapping recommendations with confidence flags and supporting rationale."
+    // bullets replaces the old single bodyText field — Points can now
+    // carry any number of achievement-style bullets, same as Experience.
+    bullets: [
+      "Built a local LLM-assisted prototype that compares ERP source schemas with target integration templates, retrieves relevant technical documentation, and generates source-grounded field-mapping recommendations with confidence flags and supporting rationale."
+    ],
+    // Empty = never eligible for nesting under a resume section; always
+    // rendered as a simple one-line "featured project" mention. A Point
+    // meant to compete for a real section (like a campaign) would list
+    // its eligible categories here, exactly like an Experience does.
+    resumeCategories: []
   }
 ];
 
 // Kept entirely SEPARATE from `timeline` on purpose — education entries
 // are never sent to curate-timeline.js and never go through LLM
-// judgment at all. They're merged into the render queue unconditionally
-// in main.js (appendCuratedTimeline), the same way landing/outro are.
+// judgment at all. js/timeline.js adds them unconditionally on every
+// render. Optional fields: `start` / `end` ("YYYY-MM") to draw a degree
+// as a period rather than a station, `date` ("YYYY-MM") to pin the
+// graduation month (defaults to June of `year`), and `bullets` for
+// honors or highlights shown when the station is opened.
 const education = [
   {
     type: "education",
@@ -231,5 +260,7 @@ const resumeSelection = {
       section: (e.resumeCategories && e.resumeCategories[0]) || "professional",
       bullets: e.achievements
     })),
-  points: timeline.filter((e) => e.type === "point").map((e) => e.id)
+  points: timeline
+    .filter((e) => e.type === "point")
+    .map((e) => ({ id: e.id, bullets: e.bullets, section: null })) // null = simple mention, the safe default
 };

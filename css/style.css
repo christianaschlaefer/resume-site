@@ -1,14 +1,43 @@
-/* Structural layout only — enough to prove the scroll mechanics
-   work. Colors, type, spacing polish come in a dedicated later step. */
+/* ============================================================
+   BASE
+   ============================================================ */
 
-body {
-  margin: 0;
+:root {
+  --ink: #1f2328;
+  --ink-soft: #3a3f47;
+  --muted: #5f6672;
+  --faint: #8d939c;
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --line: #e3e0d8;
+  --line-strong: #cbc6bb;
+  --track: #e2dfd7;
+  --chip: #f0eee8;
+  --chip-hover: #e7e4dc;
+  --focus: #2f6fde;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* Visually hidden but still reachable by screen readers — used for
-   form labels we want present for accessibility without duplicating
-   the placeholder text visually. Standard "sr-only" pattern: this is
-   NOT the same as display:none, which would hide it from AT too. */
+/* The page itself never scrolls — all movement is horizontal, inside
+   #track. (The print rules below undo this so the resume paginates.) */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* The `hidden` attribute must always win. Without this, any element
+   that also gets a `display` value from this stylesheet (flex panels,
+   the lead form) silently ignores `hidden` — author CSS beats the
+   browser's built-in [hidden] rule. */
+[hidden] {
+  display: none !important;
+}
+
+/* Visually hidden but still reachable by screen readers. NOT the same
+   as display:none, which would hide it from assistive tech too. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -21,10 +50,9 @@ body {
   border: 0;
 }
 
-/* Respects the OS-level "reduce motion" accessibility setting some
-   people rely on for motion sensitivity or vestibular disorders. This
-   overrides every transition/animation duration in the file at once,
-   rather than needing a reduced-motion variant of each one individually. */
+/* Respects the OS-level "reduce motion" setting. Overrides every
+   transition/animation at once (timeline.js separately turns the
+   smooth-scroll glide into instant jumps). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -32,190 +60,1053 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
 }
 
+/* ============================================================
+   STAGE & TRACK
+   ============================================================ */
+
 #stage {
-  min-height: 100vh; /* CHANGED from a fixed height: this lets the
-    page grow taller than the screen when a tile expands, instead of
-    clipping it. Standard "sticky footer" flex pattern — fills the
-    screen exactly when content is short, grows naturally when it's not. */
+  position: relative;
+  height: 100vh;
+  height: 100dvh; /* tracks mobile browser toolbars showing/hiding */
   display: flex;
   flex-direction: column;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage button {
+  font-family: inherit;
+}
+
+#stage button:focus-visible,
+#stage textarea:focus-visible,
+.detail-anchor:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+#track-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #track {
-  flex: 1;
-  display: flex;              /* lay tiles out left-to-right */
-  overflow-x: scroll;         /* the physical horizontal scrollbar */
-  scroll-snap-type: x mandatory; /* enables the "positive stops" */
-  /* overflow-y is intentionally left at its default now. Removing the
-     old `hidden` is what allows an expanded tile's extra height to
-     actually push the page taller instead of being clipped off. */
+  position: absolute;
+  inset: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Stops a hard swipe at the left edge from triggering the browser's
+     "back" navigation gesture on trackpads. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  outline: none;
 }
 
-/* This targets tiles once main.js renders them in.
-   Each tile will get this class regardless of template type. */
-.tile {
-  flex: 0 0 auto;             /* don't shrink tiles to fit */
-  scroll-snap-align: center;  /* each tile is a stop, centered on snap */
-  width: 60vw;
-  max-width: 500px;
-  opacity: 0.35;               /* dimmed by default... */
-  transition: opacity 0.3s ease;
+#track:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus);
 }
 
-/* Tiles are fairly narrow on small phone screens at 60vw — this
-   widens them specifically below 600px so text isn't cramped, without
-   touching the desktop/tablet sizing above that. */
-@media (max-width: 600px) {
-  .tile {
-    width: 85vw;
-  }
+#track::-webkit-scrollbar {
+  height: 8px;
 }
 
-.tile.is-active {
-  opacity: 1;                  /* ...full opacity when centered (Step 4 sets this class) */
+#track::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+
+#track-content {
+  position: relative;
+  height: 100%;
+}
+
+/* ============================================================
+   LANDING (welcome / job intake) & OUTRO
+   ============================================================ */
+
+.landing-panel,
+.outro-panel {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+}
+
+.landing-panel {
+  left: 0;
+  overflow-y: auto;
+}
+
+.landing-inner {
+  width: 100%;
+  max-width: 580px;
+  margin: auto 0;
+}
+
+.landing-eyebrow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.landing-panel h1 {
+  margin: 0;
+  font-size: clamp(34px, 5.2vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.landing-title {
+  margin: 10px 0 24px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.landing-intro {
+  margin: 0 0 18px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-soft);
 }
 
 #job-intake-form {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
-  max-width: 400px;
-  margin-top: 16px;
+  gap: 14px;
 }
 
 #job-intake-form textarea {
-  min-height: 100px;
-  padding: 10px;
+  min-height: 128px;
+  padding: 14px 16px;
   font: inherit;
-  border: 1px solid #999;
-  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
   resize: vertical;
 }
 
-#job-intake-form button {
-  padding: 10px 24px;
-  font: inherit;
-  cursor: pointer;
+.intake-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
 }
 
-#job-intake-form button:disabled {
+#intake-submit {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s ease;
+}
+
+#intake-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+#intake-submit:disabled {
   opacity: 0.6;
-  cursor: not-allowed;
+  cursor: progress;
+}
+
+#intake-status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.landing-hint {
+  margin: 18px 0 0;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 #match-new-role {
-  margin-top: 20px;
-  padding: 8px 18px;
-  font: inherit;
-  background: none;
-  border: 1px solid #999;
-  border-radius: 6px;
+  margin-top: 18px;
+  padding: 9px 18px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
   cursor: pointer;
 }
 
-/* Achievements start fully collapsed via max-height:0 + hidden
-   overflow. This is a common lightweight technique for animating
-   something whose content height isn't known ahead of time — true
-   height:auto can't be transitioned by CSS, but max-height can. The
-   400px ceiling is a placeholder; real sizing gets tuned in the
-   visual design pass once actual content/typography is in place. */
-.achievements-list {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.35s ease;
-}
-
-.tile.is-expanded .achievements-list {
-  max-height: 400px;
-}
-
-.achievements-toggle {
-  display: block;
-  margin-top: 8px;
-  padding: 0;
-  background: none;
-  border: none;
-  font: inherit;
-  color: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* Expanding an Experience tile now ONLY grows its height — width
-   stays locked to the standard tile size. This is what keeps the
-   rest of the timeline visually stable instead of bumping wider.
-   The extra height is free to push the page taller because of the
-   #stage/#track changes above (no fixed height, no clipped overflow). */
-.tile.is-expanded {
-  opacity: 1; /* stays fully visible regardless of active/inactive state */
-}
-
-/* Only one tile can be expanded at a time (enforced in JS — see
-   expandTile/collapseTile). While one is open, every OTHER tile dims
-   further than the normal 0.35 inactive state, so attention stays on
-   the one the user is actually reading. */
-#track.has-expanded-tile .tile:not(.is-expanded) {
-  opacity: 0.12;
-}
-
-/* Landing and outro are full-viewport-width by design. This isn't
-   just cosmetic — it's what gives the browser genuine scrollable
-   room to actually center the very first and very last Experience
-   tiles. Without this, scrollLeft can never go low/high enough for
-   those edge tiles to reach true center, which was the root cause
-   of the active-tile detection bug. */
-.tile.tile--landing,
-.tile.tile--outro {
-  width: 100%;
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.outro-panel {
   text-align: center;
 }
 
-#skill-archive {
-  height: 100px;
-  border-top: 1px solid #ccc;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 24px;
-  overflow-x: auto; /* in case many skills accumulate at once */
-  transition: opacity 0.3s ease;
-  /* Without this, growing the page taller (via an expanded tile)
-     would just push this bar down the page along with everything
-     else. Sticky pins it to the viewport's bottom edge instead, so
-     it stays visible no matter how tall the page gets. */
-  position: sticky;
-  bottom: 0;
-  background: #fff; /* needed so scrolled content doesn't show through it */
-  z-index: 2;
+.outro-inner h2 {
+  margin: 0 0 8px;
+  font-size: clamp(26px, 3.6vw, 36px);
+  letter-spacing: -0.02em;
 }
 
-#skill-archive.is-hidden {
+.outro-inner p:last-child {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ============================================================
+   TIMELINE LAYER
+   All absolute positions below are set by js/timeline.js; the CSS
+   variables (--axis-y, --lane-bottom, etc.) are written onto
+   #track-frame on every layout.
+   ============================================================ */
+
+.timeline-layer {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  pointer-events: none; /* children opt back in where interactive */
+}
+
+/* ---------- Central axis ---------- */
+
+.axis {
+  position: absolute;
+  left: 0;
+  top: var(--axis-y);
+  width: 100%;
+  height: 0;
+  z-index: 1;
+  opacity: var(--dim, 1);
+  transition: opacity 0.3s ease;
+}
+
+.axis-line {
+  position: absolute;
+  left: 0;
+  top: -3px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 180px);
+  mask-image: linear-gradient(to right, transparent, #000 180px);
+}
+
+/* One colored segment per period: the main lane sits on the line;
+   concurrent lanes are thinner bars stacked just above it. */
+.axis-seg {
+  position: absolute;
+  top: -4px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.axis-seg.is-secondary {
+  top: calc(-14px - (var(--lane, 1) - 1) * 7px);
+  height: 4px;
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.axis-seg.is-education {
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0 4px, transparent 4px 8px);
+  background-color: var(--accent);
+}
+
+/* The current role's segment ends in a gently pulsing "live" cap. */
+.axis-seg.is-present::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: live-pulse 2.4s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0.25); }
+  70% { box-shadow: 0 0 0 9px rgba(31, 35, 40, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0); }
+}
+
+.axis-ticks {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+}
+
+.axis-tick {
+  position: absolute;
+  top: 7px;
+  width: 1px;
+  height: 4px;
+  background: var(--line-strong);
+}
+
+.axis-tick.is-major {
+  height: 8px;
+  background: var(--faint);
+}
+
+.axis-label {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.axis-label.is-start {
+  transform: none;
+}
+
+/* A compressed gap: two slanted strokes cutting through the line. */
+.axis-break {
+  position: absolute;
+  top: -9px;
+  width: 7px;
+  height: 18px;
+  margin-left: -3.5px;
+  background: var(--bg);
+  border-left: 1.5px solid var(--faint);
+  border-right: 1.5px solid var(--faint);
+  transform: skewX(-20deg);
+}
+
+.axis-now {
+  position: absolute;
+  top: 0;
+}
+
+.axis-now-dot {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+}
+
+.axis-now-label {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ---------- Period cards (Experiences & dated Education) ---------- */
+
+/* The wrapper is exactly as wide as the period. The card inside is
+   position: sticky, so the browser keeps it at the playhead for the
+   whole period, then the wrapper's right edge pushes it out — the
+   "bump" to the next chapter. Bottom-anchored so cards sit just above
+   the axis and expand UPWARD, keeping the line visible. */
+.journey-item {
+  position: absolute;
+  top: var(--expand-top);
+  height: calc(var(--lane-bottom) - var(--expand-top));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.journey-item.is-stacked-secondary {
+  justify-content: flex-start;
+  padding-top: calc(var(--lane-top) - var(--expand-top));
+}
+
+.journey-item.is-secondary-lane {
+  z-index: 3;
+}
+
+.journey-item.is-expanded-host {
+  z-index: 30;
+}
+
+.journey-card {
+  position: sticky;
+  width: var(--card-w);
+  box-sizing: border-box;
+  max-height: var(--card-max, var(--lane-h));
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 3px 0 var(--accent),
+    0 1px 2px rgba(20, 22, 26, 0.05),
+    0 10px 28px -16px rgba(20, 22, 26, 0.25);
+  pointer-events: auto;
+  /* --scroll-opacity comes from timeline.js (approaching/leaving the
+     playhead); --dim from focus mode. They multiply. */
+  opacity: calc(var(--scroll-opacity, 1) * var(--dim, 1));
+  transition: opacity 0.15s linear, box-shadow 0.3s ease;
+}
+
+.journey-card.is-gone {
+  pointer-events: none;
+}
+
+.journey-card.is-active {
+  box-shadow:
+    inset 0 3px 0 var(--accent),
+    0 1px 2px rgba(20, 22, 26, 0.06),
+    0 18px 40px -20px rgba(20, 22, 26, 0.4);
+}
+
+.journey-card.is-expanded {
+  max-height: calc(var(--lane-bottom) - var(--expand-top));
+}
+
+.card-head {
+  flex: none;
+}
+
+.card-eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent, var(--muted));
+}
+
+.card-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.card-org {
+  margin: 3px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.card-meta {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* The body is the card's own scroll area: if expanded content is
+   taller than the space available, it scrolls inside the card (and the
+   mouse wheel scrolls it there instead of moving the timeline). */
+.card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Scroll shadows: a soft shadow appears at the top or bottom edge only
+   when there's more content to scroll in that direction. The "local"
+   gradients scroll with the content and cover the fixed shadows once
+   you reach an end — pure CSS, no scroll listeners. */
+.card-body,
+.point.is-expanded .point-list,
+.station-card {
+  background:
+    linear-gradient(var(--surface) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), var(--surface) 70%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(20, 22, 26, 0.24), rgba(20, 22, 26, 0)) center top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(20, 22, 26, 0.24), rgba(20, 22, 26, 0)) center bottom / 100% 12px no-repeat scroll;
+  background-color: var(--surface);
+}
+
+.card-overview {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.journey-card.is-expanded .card-overview {
+  display: block;
+  overflow: visible;
+}
+
+/* Collapsed lists animate open via max-height (height:auto can't be
+   transitioned, max-height can). */
+.card-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-height: 0;
+  overflow: hidden;
   opacity: 0;
-  pointer-events: none; /* prevents interacting with invisible tokens */
+  transition: max-height 0.35s ease, opacity 0.25s ease, margin 0.35s ease;
+}
+
+.is-expanded .card-list {
+  max-height: 2400px;
+  margin-top: 10px;
+  opacity: 1;
+}
+
+.card-list li + li {
+  margin-top: 6px;
+}
+
+.card-toggle {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--chip);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.card-toggle:hover {
+  background: var(--chip-hover);
+}
+
+.toggle-chevron {
+  transition: transform 0.25s ease;
+}
+
+.is-expanded .toggle-chevron {
+  transform: rotate(180deg);
+}
+
+/* Stacked (narrow-screen) concurrent roles show a compact card until
+   opened, so two cards fit in the lane at once. */
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) {
+  padding: 12px 14px 10px;
+}
+
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-body {
+  display: none;
+}
+
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-title {
+  font-size: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.journey-item.is-stacked-secondary .journey-card:not(.is-expanded) .card-toggle {
+  margin-top: 8px;
+}
+
+/* ---------- Education stations (on the line) ---------- */
+
+.station {
+  position: absolute;
+  top: var(--axis-y);
+  width: 0;
+  height: 0;
+  z-index: 3;
+  opacity: var(--dim, 1);
+  transition: opacity 0.3s ease;
+}
+
+.station.is-expanded {
+  z-index: 30;
+}
+
+.station-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  height: 30px;
+  padding: 0 12px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  /* The ring "cuts" the axis line around the pill. */
+  box-shadow: 0 0 0 3px var(--bg);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.station.is-raised .station-pill {
+  transform: translate(-50%, calc(-50% - 34px));
+}
+
+.station.is-passed .station-pill {
+  background: var(--ink);
+  color: #fff;
+}
+
+.station.is-passed .station-year {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.station-icon {
+  flex: none;
+}
+
+.station-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.station-year {
+  flex: none;
+  color: var(--muted);
+}
+
+.station-card {
+  position: absolute;
+  left: 0;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(300px, 86vw);
+  max-height: calc(var(--axis-y) - var(--expand-top) - 30px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px -18px rgba(20, 22, 26, 0.45);
+  pointer-events: auto;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.station.is-expanded .station-card {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+.station-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.station-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---------- Points (branching below the line) ---------- */
+
+.point {
+  position: absolute;
+  top: var(--axis-y);
+  width: 0;
+  height: 0;
+  z-index: 2;
+  opacity: var(--dim, 1);
+  transition: opacity 0.3s ease;
+}
+
+.point.is-expanded {
+  z-index: 30;
+}
+
+.point-dot {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--ink-soft);
+  transition: background 0.25s ease;
+}
+
+.point.is-revealed .point-dot {
+  background: var(--ink-soft);
+}
+
+/* The leader line "draws" downward when the playhead reaches it. */
+.point-stem {
+  position: absolute;
+  left: -0.5px;
+  top: 6px;
+  width: 1px;
+  height: calc(var(--stem) - 6px);
+  background: var(--line-strong);
+  transform-origin: top;
+  transform: scaleY(0);
+  transition: transform 0.35s ease;
+}
+
+.point.is-revealed .point-stem {
+  transform: scaleY(1);
+}
+
+.point-card {
+  position: absolute;
+  top: var(--stem);
+  left: var(--card-offset);
+  width: var(--point-card-w);
+  max-height: var(--point-max, 240px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  pointer-events: auto;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s, box-shadow 0.25s ease;
+}
+
+.point.is-revealed .point-card {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.18s, 0.18s, 0s, 0s;
+}
+
+.point.is-expanded .point-card {
+  border-style: solid;
+  box-shadow: 0 16px 36px -18px rgba(20, 22, 26, 0.45);
+}
+
+.point-title {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 700;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.point.is-expanded .point-title {
+  display: block;
+  overflow: visible;
+}
+
+.point-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  font-size: 12.5px;
+}
+
+.point.is-expanded .point-list {
+  overflow-y: auto;
+}
+
+.point-card .card-toggle {
+  margin-top: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ---------- Focus mode: one card open, everything else recedes ---------- */
+
+#track.has-expanded-card .journey-card:not(.is-expanded),
+#track.has-expanded-card .axis,
+#track.has-expanded-card .point:not(.is-expanded),
+#track.has-expanded-card .station:not(.is-expanded) {
+  --dim: 0.14;
+}
+
+/* ============================================================
+   HUD (fixed above the track)
+   ============================================================ */
+
+#timeline-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+
+#timeline-hud.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+#playhead-chip,
+#playhead-line,
+#timeline-progress,
+#chapter-nav,
+#timeline-brand {
+  transition: opacity 0.3s ease;
+}
+
+#track-frame.has-expanded-card #playhead-chip,
+#track-frame.has-expanded-card #playhead-line {
+  opacity: 0;
+}
+
+#track-frame.has-expanded-card #timeline-progress,
+#track-frame.has-expanded-card #chapter-nav,
+#track-frame.has-expanded-card #timeline-brand {
+  opacity: 0.35;
+}
+
+#timeline-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ink);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+#playhead-line {
+  position: absolute;
+  left: var(--playhead-x);
+  top: var(--lane-bottom);
+  width: 2px;
+  height: calc(var(--axis-y) - var(--lane-bottom));
+  margin-left: -1px;
+  background: linear-gradient(to bottom, rgba(31, 35, 40, 0), rgba(31, 35, 40, 0.5));
+}
+
+#playhead-chip {
+  position: absolute;
+  left: var(--playhead-x);
+  top: var(--axis-y);
+  transform: translate(-50%, -50%);
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+#track-frame.is-narrow #playhead-chip {
+  transform: translate(-6px, -50%);
+}
+
+#timeline-brand {
+  position: absolute;
+  top: 12px;
+  left: 20px;
+  max-width: calc(100% - 140px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#timeline-brand:hover {
+  background: rgba(31, 35, 40, 0.05);
+}
+
+#timeline-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.timeline-brand-sub {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#chapter-nav {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+#chapter-nav button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.06);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+#chapter-nav button:hover {
+  background: var(--chip);
+}
+
+#chapter-nav button:active {
+  transform: scale(0.94);
+}
+
+/* ============================================================
+   SKILL DOCK
+   ============================================================ */
+
+#skill-dock {
+  flex: none;
+  height: 72px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(255, 255, 255, 0.85);
+  border-top: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: opacity 0.3s ease;
+}
+
+#skill-dock.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.skill-dock-label {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#skill-count:not(:empty) {
+  min-width: 20px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  font-size: 11px;
+  text-align: center;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 999px;
+  letter-spacing: 0;
+}
+
+#skill-archive {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .skill-token {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  border: 1px solid #999;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  font-size: 0.85rem;
   white-space: nowrap;
   opacity: 0;
   transform: scale(0.8);
@@ -233,35 +1124,53 @@ body {
 }
 
 .skill-token .skill-level {
-  font-weight: bold;
+  font-weight: 700;
+  color: var(--muted);
 }
 
-/* Brief pulse whenever a skill's level increases (or decreases,
-   scrolling backward over a repeat) — same animation either way. */
+/* Brief pulse whenever a skill's level changes. */
 @keyframes skill-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.3); }
-  100% { box-shadow: 0 0 0 10px rgba(0, 0, 0, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(31, 35, 40, 0.3); }
+  100% { box-shadow: 0 0 0 10px rgba(31, 35, 40, 0); }
 }
 
 .skill-token.just-upgraded {
   animation: skill-pulse 0.6s ease-out;
 }
 
+/* ============================================================
+   NARROW SCREENS
+   ============================================================ */
+
+@media (max-width: 639px) {
+  #skill-dock {
+    height: 64px;
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .card-title {
+    font-size: 17px;
+  }
+
+  .card-overview {
+    -webkit-line-clamp: 3;
+  }
+
+  #chapter-nav {
+    right: 12px;
+  }
+}
+
+/* ============================================================
+   DETAIL POPUPS
+   ============================================================ */
+
 /* Words linked to a Detail popup — dotted underline signals "hover
    for more" without looking like a normal link (it isn't one). */
 .detail-anchor {
   text-decoration: underline dotted;
   cursor: help;
-}
-
-/* Spans aren't natively focusable/interactive, so unlike a real
-   <button> they have no default focus indicator at all. Since we
-   added tabindex to make these keyboard-reachable, they need an
-   explicit visible focus style or a keyboard user would have no way
-   to tell which anchor is currently focused. */
-.detail-anchor:focus {
-  outline: 2px solid #222;
-  outline-offset: 2px;
 }
 
 /* Single reusable popup, positioned via JS (see showDetailPopup).
@@ -279,7 +1188,7 @@ body {
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
-  z-index: 10;
+  z-index: 60;
 }
 
 #detail-popup.is-visible {
@@ -298,7 +1207,7 @@ body {
 /* ============================================================
    RESUME OVERLAY
    A genuine full-screen takeover, separate from #track entirely.
-   Shown/hidden by main.js based on whether outro is the active tile.
+   Shown/hidden by main.js based on the timeline's zone.
    ============================================================ */
 #resume-overlay {
   position: fixed;
@@ -371,9 +1280,8 @@ body {
 
 .resume-entry {
   margin-bottom: 8pt;
-  /* THE fix for titles getting cut off from their own bullets: forces
-     the whole block (title + meta + bullets) to move together to the
-     next page rather than splitting across the boundary. */
+  /* Forces the whole block (title + meta + bullets) to move together
+     to the next page rather than splitting across the boundary. */
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -405,10 +1313,8 @@ body {
   margin: 6pt 0 0;
 }
 
-/* Default browser print margins (~1in) eat significant space on a
-   dense single-page-style document — this matches the 0.5in margin
-   the page-fit measurement logic (see fitResumeToTwoPages in main.js)
-   assumes when calculating how much content actually fits. */
+/* Default browser print margins (~1in) eat significant space — this
+   matches the 0.5in margin the page-fit measurement logic assumes. */
 @page {
   margin: 0.5in;
 }
@@ -451,8 +1357,7 @@ body {
   cursor: pointer;
 }
 
-/* Side-by-side inputs get cramped on a phone-width screen — stack
-   them and let each take the full width instead. */
+/* Side-by-side inputs get cramped on a phone-width screen. */
 @media (max-width: 480px) {
   #lead-form {
     flex-direction: column;
@@ -464,14 +1369,20 @@ body {
   }
 }
 
-/* "Download PDF" is currently just the browser's native print dialog
-   (which every browser can save as a real PDF from) — a real PDF
-   library is future work, but this genuinely works today. Hiding
-   #stage entirely and forcing the overlay static means printing
-   paginates the resume normally rather than treating it as a
-   viewport-fixed layer stuck on one page. */
+/* "Download PDF" uses the browser's native print dialog (which every
+   browser can save as a real PDF). Hiding #stage entirely, forcing the
+   overlay static, and letting the page grow again means printing
+   paginates the resume normally. */
 @media print {
-  #stage {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #stage,
+  #timeline-announcer,
+  #detail-popup {
     display: none !important;
   }
   #resume-overlay {
@@ -487,17 +1398,15 @@ body {
 
 /* ============================================================
    DEBUG PANEL
-   Only ever created (see setupDebugPanel in main.js) when ?debug=true
-   is in the URL — everyone else's page never contains this element
-   at all. z-index is intentionally higher than the resume overlay's
-   (100), so it stays visible and usable even while that's open.
+   Only ever created when ?debug=true is in the URL. z-index is above
+   the resume overlay's (100), so it stays usable while that's open.
    ============================================================ */
 #debug-panel {
   position: fixed;
-  top: 8px;
+  top: 60px; /* sits below the chapter navigation buttons */
   right: 8px;
   z-index: 999;
-  width: 260px;
+  width: min(260px, calc(100vw - 16px));
   max-height: 60vh;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.85);
@@ -506,6 +1415,32 @@ body {
   font-size: 0.75rem;
   padding: 10px;
   border-radius: 6px;
+}
+
+#debug-panel.is-collapsed {
+  width: auto;
+  padding: 0;
+}
+
+#debug-panel.is-collapsed #debug-body {
+  display: none;
+}
+
+#debug-toggle {
+  display: block;
+  width: 100%;
+  padding: 0 0 6px;
+  font: inherit;
+  font-weight: bold;
+  text-align: left;
+  color: #0f0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+#debug-panel.is-collapsed #debug-toggle {
+  padding: 6px 10px;
 }
 
 #debug-summary {
@@ -524,8 +1459,6 @@ body {
   opacity: 0.85;
 }
 
-/* Debugging tool only — should never appear in a printed/downloaded
-   resume even if it happened to be open when Download was clicked. */
 @media print {
   #debug-panel {
     display: none !important;

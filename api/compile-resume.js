@@ -36,8 +36,22 @@ const COMPILE_RESUME_TOOL = {
       },
       points: {
         type: "array",
-        items: { type: "string" },
-        description: "IDs of Point entries worth featuring as notable projects."
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "The Point's id, exactly as given in the source data." },
+            bullets: {
+              type: "array",
+              items: { type: "string" },
+              description: "One or more bullets for this Point, same rules as Experience bullets: verbatim, combined, or lightly rewritten from its source content only."
+            },
+            section: {
+              type: ["string", "null"],
+              description: "If this Point should be NESTED into a real resume section (rendered like a mini-Experience with its own bullets) — \"professional\" or one of its own resumeCategories values. Set to null to leave it as a lightweight single-line \"featured project\" mention instead, which is the right choice for most Points."
+            }
+          },
+          required: ["id", "bullets", "section"]
+        }
       }
     },
     required: ["experiences", "points"]
@@ -122,7 +136,7 @@ function buildInitialPrompt(jobDescription, curatedEntries, mostRecentId, oldest
     '- Decide which ONE secondary heading (if any) best fits this job, drawn from whichever categories appear in these entries\' resumeCategories besides "professional" (e.g. "leadership", "internationalGovernment", "selected"). Use at most one secondary heading across the whole resume, and never place the same entry in two sections.\n' +
     "- Bullets may be copied verbatim, combined, OR REWRITTEN to emphasize what's most relevant to THIS specific role — rephrasing for emphasis is encouraged. The one hard limit: never introduce a fact, number, or skill that isn't already present somewhere in that entry's own achievements/overview.\n" +
     "- Within each entry, list bullets in descending order of relevance to this role — most relevant first.\n" +
-    "- Select which, if any, Point entries are worth featuring as notable projects."
+    "- For each Point entry, decide independently: does it have enough substance and relevance to this role to be NESTED into a real section (like a mini-Experience, with its own bullets, under \"professional\" or one of its own resumeCategories)? Or is it better left as a lightweight single-line mention (section: null)? Most Points should stay a simple mention — nesting is for the rare case where a Point's content is genuinely as substantial and relevant as a real work experience for THIS role. Never nest a Point whose resumeCategories don't include the section you're placing it in."
   );
 }
 
@@ -145,7 +159,8 @@ function buildRevisionPrompt(jobDescription, curatedEntries, revision, mostRecen
     "Hard constraints that still apply:\n" +
     `- Every experience must remain with at least one bullet, EXCEPT the single oldest entry (id: "${oldestId}"), which may be dropped entirely only if genuinely unrelated to this role and bullet-trimming alone isn't enough to fit.\n` +
     `- The most recent employment entry (id: "${mostRecentId}") must remain, with at least one bullet.\n` +
-    "- Never introduce a fact, number, or skill not already present in the original source entries."
+    "- Never introduce a fact, number, or skill not already present in the original source entries.\n" +
+    '- If a Point is currently nested into a section, consider whether un-nesting it (section: null) is actually the right tightening move here — a nested Point competes for the same page space as a real Experience.'
   );
 }
 
@@ -189,6 +204,9 @@ function extractSelection(apiResponse, curatedEntries, mostRecentId, oldestId) {
     console.error("compile-resume: tool_use input missing experiences array:", JSON.stringify(parsed).slice(0, 300));
     return mechanicalFallback(curatedEntries);
   }
+  if (!Array.isArray(parsed.points)) {
+    parsed.points = []; // malformed/missing points shouldn't sink an otherwise-valid experiences array
+  }
   return enforceAllExperiencesPresent(parsed, curatedEntries, oldestId);
 }
 
@@ -231,6 +249,11 @@ function mechanicalFallback(curatedEntries) {
       section: (e.resumeCategories && e.resumeCategories[0]) || "professional",
       bullets: e.achievements || []
     }));
-  const points = curatedEntries.filter((e) => e.type === "point").map((e) => e.id);
+  // Conservative on purpose: section always null here, meaning every
+  // Point stays a simple featured mention — nesting is a judgment call,
+  // and this fallback only runs when the real judgment call failed.
+  const points = curatedEntries
+    .filter((e) => e.type === "point")
+    .map((e) => ({ id: e.id, bullets: e.bullets || [], section: null }));
   return { experiences, points };
 }
