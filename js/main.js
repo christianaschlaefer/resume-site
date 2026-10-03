@@ -756,7 +756,7 @@ function renderResume(data) {
 
 function renderResumeExperience({ entry, bulletTexts }) {
   return `
-    <div class="resume-entry">
+    <div class="resume-entry" data-id="${entry.id}">
       <p class="resume-entry-title">${entry.employer} | ${entry.jobTitle}</p>
       <p class="resume-entry-meta">${entry.dates.start} – ${entry.dates.end} | ${entry.location}</p>
       <ul>${bulletTexts.map((b) => `<li>${b}</li>`).join("")}</ul>
@@ -772,6 +772,13 @@ function renderResumeExperience({ entry, bulletTexts }) {
 // actually matters most to this resume's effectiveness, so an overflow
 // sends the draft back to the LLM for a genuine revision pass instead
 // of a script blindly cutting "whichever entry has the most bullets."
+//
+// This also catches a subtler failure than total length: a total-height
+// check alone can't see that ONE oversized block straddles the page-1/
+// page-2 boundary, which triggers CSS's break-inside:avoid to push that
+// WHOLE block to page 2 — leaving a gap of wasted white space on page 1
+// where nothing else exists to fill it. analyzeLayout() below checks
+// each entry's actual position for exactly this, not just total height.
 // ============================================================
 
 // US Letter at 0.5in margins (matches the @page rule in style.css).
@@ -781,48 +788,74 @@ function renderResumeExperience({ entry, bulletTexts }) {
 const PAGE_CONTENT_WIDTH_IN = 8.5 - 1; // 8.5in page minus 0.5in each side
 const PAGE_CONTENT_HEIGHT_PX = (11 - 1) * 96; // 10in of content, in px
 
-// Renders the given html into an invisible, fixed-width clone sized to
-// match a real printed page's content area, then reads its actual
-// height — this is why the estimate is accurate even though the
-// visible page is much wider than a real sheet of paper.
-function estimatePageCount(html) {
+// Renders into an invisible, fixed-width clone sized to match a real
+// printed page's content area, then reports both the total page count
+// AND whether any individual .resume-entry straddles the page-1/page-2
+// boundary (which a total-height check alone would miss entirely).
+function analyzeLayout(html) {
   const measurer = document.createElement("div");
   measurer.style.cssText =
     `position: fixed; visibility: hidden; pointer-events: none; ` +
     `top: -99999px; left: -99999px; width: ${PAGE_CONTENT_WIDTH_IN}in;`;
   measurer.innerHTML = html;
   document.body.appendChild(measurer);
+
   const totalHeightPx = measurer.scrollHeight;
+  const pages = Math.ceil(totalHeightPx / PAGE_CONTENT_HEIGHT_PX);
+
+  // Only the page-1/page-2 boundary matters here — that's the specific
+  // bug being fixed. An entry "straddles" it if it starts before the
+  // boundary but ends after it; that's exactly when break-inside:avoid
+  // forces the whole block to page 2, wasting the space before it.
+  let overflowEntryId = null;
+  const entries = measurer.querySelectorAll(".resume-entry");
+  entries.forEach((el) => {
+    if (overflowEntryId) return; // only report the first/topmost one
+    const top = el.offsetTop;
+    const bottom = top + el.offsetHeight;
+    if (top < PAGE_CONTENT_HEIGHT_PX && bottom > PAGE_CONTENT_HEIGHT_PX) {
+      overflowEntryId = el.dataset.id;
+    }
+  });
+
   document.body.removeChild(measurer);
-  return Math.ceil(totalHeightPx / PAGE_CONTENT_HEIGHT_PX);
+  return { pages, overflowEntryId };
 }
 
-// Measures the compiled resume and, if it's too long, sends it back to
-// compile-resume in "revision" mode so the LLM itself decides how to
-// tighten it — capped at 2 attempts for cost/latency. If it's still
-// slightly over after that, the overflow is accepted as-is: a resume
-// that runs a few lines onto page 3 is a far safer outcome than one
-// where a script deleted something that might have mattered.
+// Measures the compiled resume and, if it's too long OR has a
+// boundary-straddling entry, sends it back to compile-resume in
+// "revision" mode so the LLM itself decides how to tighten it — capped
+// at 2 attempts for cost/latency. If issues remain after that, they're
+// accepted as-is: a resume with minor overflow or a sub-optimal break is
+// a far safer outcome than one where a script deleted something that
+// might have mattered.
 //
 // Returns the finalized SELECTION, not rendered HTML — the header
 // (title + Executive Profile) still needs to be written against this
 // FINISHED body afterward, in compileResume() below.
 async function fitSelectionToTwoPages(selection, curatedEntries) {
   let current = selection;
-  let pages = estimatePageCount(renderResume(buildResumeData(current)));
+  let layout = analyzeLayout(renderResume(buildResumeData(current)));
 
   const maxRevisions = 2;
-  for (let attempt = 0; attempt < maxRevisions && pages > 2; attempt++) {
-    const revised = await requestResumeRevision(curatedEntries, current, pages);
+  for (
+    let attempt = 0;
+    attempt < maxRevisions && (layout.pages > 2 || layout.overflowEntryId);
+    attempt++
+  ) {
+    const overflowEntry = layout.overflowEntryId
+      ? curatedEntries.find((e) => e.id === layout.overflowEntryId)
+      : null;
+    const revised = await requestResumeRevision(curatedEntries, current, layout.pages, overflowEntry);
     if (!revised) break; // revision call itself failed — stop rather than loop on nothing
     current = revised;
-    pages = estimatePageCount(renderResume(buildResumeData(current)));
+    layout = analyzeLayout(renderResume(buildResumeData(current)));
   }
 
   return current;
 }
 
-async function requestResumeRevision(curatedEntries, previousSelection, estimatedPages) {
+async function requestResumeRevision(curatedEntries, previousSelection, estimatedPages, overflowEntry) {
   try {
     const response = await fetch("/api/compile-resume", {
       method: "POST",
@@ -830,7 +863,16 @@ async function requestResumeRevision(curatedEntries, previousSelection, estimate
       body: JSON.stringify({
         jobDescription: lastJobDescription,
         curatedEntries,
-        revision: { previousSelection, estimatedPages }
+        revision: {
+          previousSelection,
+          estimatedPages,
+          // Only included when a specific entry is causing a wasted-space
+          // page break — lets the prompt target that ONE entry instead of
+          // just generically asking for something, anything, to shrink.
+          overflowEntry: overflowEntry
+            ? { employer: overflowEntry.employer, jobTitle: overflowEntry.jobTitle }
+            : undefined
+        }
       })
     });
     if (!response.ok) throw new Error(`Request failed: ${response.status}`);

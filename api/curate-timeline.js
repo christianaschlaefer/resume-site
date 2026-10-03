@@ -4,6 +4,13 @@
 //
 // This is the ONLY place ANTHROPIC_API_KEY is ever read — it lives in
 // Vercel's Environment Variables and is never sent to the browser.
+//
+// REDESIGNED: Experience entries are now ALWAYS included, unconditionally
+// — a recruiter expects to see full work history on a timeline, not a
+// filtered highlight reel. Only Point entries (optional "personality"/
+// extra-context signals) are ever subject to the LLM's judgment. This
+// also means the LLM's decision space is much smaller than before,
+// which should itself improve reliability.
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -11,11 +18,6 @@ module.exports = async function handler(req, res) {
   }
 
   // ---- Basic abuse guards ----------------------------------------
-  // None of this stops a determined, header-spoofing attacker — it
-  // stops the far more common case: bots/scanners that discover this
-  // URL and hit it directly, bypassing the site's UI entirely, with
-  // no realistic headers or payload. See the chat for the account-level
-  // protections (spend cap, rate limiting) that back this up.
   const origin = req.headers.origin || req.headers.referer || "";
   if (!req.headers.host || !origin.includes(req.headers.host)) {
     return res.status(403).json({ error: "Forbidden" });
@@ -33,13 +35,19 @@ module.exports = async function handler(req, res) {
   // ------------------------------------------------------------------
 
   const trimmed = jobDescription.trim();
+  const experienceIds = timeline.filter((e) => e.type === "experience").map((e) => e.id);
+  const points = timeline.filter((e) => e.type === "point");
   const allIds = timeline.map((e) => e.id);
-  const mostRecentId = getMostRecentExperienceId(timeline);
 
-  // No job context given — skip the API call entirely rather than asking
-  // the model to judge relevance with nothing to judge against. Matches
-  // the original mock's "generic fallback" behavior, and saves a real
-  // API call for a case that genuinely needs no judgment.
+  // No Points to judge at all — nothing for the LLM to decide, skip the
+  // call entirely. Experiences are included unconditionally regardless.
+  if (points.length === 0) {
+    console.log("curate-timeline: no Points in dataset — returning all Experiences, no API call");
+    return res.status(200).json({ includedIds: experienceIds });
+  }
+
+  // No job context given — skip the API call entirely. Generic fallback:
+  // everything, Experiences and Points alike.
   if (trimmed.length === 0) {
     console.log("curate-timeline: blank input — skipping API call, returning all entries");
     return res.status(200).json({ includedIds: allIds });
@@ -55,31 +63,23 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        // Generous on purpose — max_tokens is a ceiling, not a target,
-        // so this costs nothing extra unless actually needed. Anthropic's
-        // own docs use 16000 for comparable calls; this covers both the
-        // web search tool overhead AND the final answer with real margin.
         max_tokens: 8192,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
             role: "user",
             content:
-              "You are helping curate a career timeline for a specific job application, from the perspective of a hiring manager.\n\n" +
+              "You are deciding which OPTIONAL 'Point' entries to feature on a career timeline for a specific job application, from the perspective of a hiring manager.\n\n" +
               `Job description provided by the visitor:\n"""\n${trimmed}\n"""\n\n` +
-              "Here is the candidate's full career history, as a JSON array of Experience and Point entries:\n" +
-              JSON.stringify(timeline) +
+              "For context, here is the candidate's full professional Experience history, which is ALWAYS shown in full regardless of your decision below — you are not judging these:\n" +
+              JSON.stringify(timeline.filter((e) => e.type === "experience")) +
+              "\n\n" +
+              "Here are the OPTIONAL Point entries you ARE deciding on — smaller signals like certifications, side projects, volunteer work, campaigns, or other notable activities that go beyond the formal work history above:\n" +
+              JSON.stringify(points) +
               "\n\n" +
               "If the description names a specific company and role, use web search to try to find the actual posting and understand its real requirements.\n\n" +
-              `The most recent employment entry (id: "${mostRecentId}") MUST always be included, regardless of apparent relevance — recency itself is a required signal of current standing.\n\n` +
-              "For every OTHER entry, make an INDEPENDENT judgment call: would a hiring manager screening specifically for this role's actual requirements consider this entry a meaningful, direct piece of supporting evidence? Judge each entry on its own merits against the real job requirements — not relative to the other entries, and not against any target count.\n\n" +
-              "There is NO target number of entries to include. Let the genuine strength of the match determine the result size:\n" +
-              "- An excellent, broad match might reasonably justify including most or even all of the candidate's history.\n" +
-              "- A narrow, highly specialized role might reasonably justify including only a handful of entries.\n" +
-              "- A good curation is SELECTIVE where selectivity is warranted — it is expected and desirable to exclude entries that don't meaningfully support this specific role, even if they would be impressive in a different context.\n\n" +
-              "Points deserve this same individualized judgment, not automatic deprioritization relative to Experiences — a Point capturing a certification, side project, volunteer work, political campaign, or other notable activity can meaningfully strengthen a candidacy for some roles, and should be included whenever it genuinely does, even if it wouldn't for a more narrowly technical role.\n\n" +
-              "List includedIds in descending order of how strongly each one supports this specific candidacy.\n\n" +
-              'Your entire response must be nothing but the raw JSON object — no explanation, no preamble, no markdown code fences. Begin your response with { and end with }, in this exact shape: {"includedIds": ["id1", "id2", ...]}'
+              "For each Point, judge independently: would including this add valuable supporting context or a compelling 'extra dimension' for a recruiter evaluating this candidate for THIS specific role — complementing the Experience history above, not competing with it? Include a Point when it genuinely adds something; exclude it when it would be unrelated, confusing, or redundant with what the Experience history already shows.\n\n" +
+              'Your entire response must be nothing but the raw JSON object — no explanation, no preamble, no markdown code fences. Begin your response with { and end with }, in this exact shape: {"includedPointIds": ["id1", "id2", ...]}'
           }
         ]
       })
@@ -90,77 +90,38 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await anthropicResponse.json();
-    const includedIds = extractIncludedIds(data, allIds, mostRecentId);
-    console.log(`curate-timeline: succeeded, included ${includedIds.length} of ${allIds.length} entries`);
+    const includedPointIds = extractIncludedPointIds(data, points.map((p) => p.id));
+    const includedIds = [...experienceIds, ...includedPointIds];
+    console.log(`curate-timeline: succeeded, all ${experienceIds.length} Experiences + ${includedPointIds.length} of ${points.length} Points`);
     return res.status(200).json({ includedIds });
   } catch (error) {
     console.error("Curation failed:", error);
-    // Fail open: show the full timeline rather than leaving the visitor
-    // stuck on a blank page if the API call fails for any reason.
+    // Fail open: all Experiences (unconditional anyway) + all Points,
+    // rather than leaving the visitor stuck if the API call fails.
     return res.status(200).json({ includedIds: allIds });
   }
 };
 
-// Among Experience entries only (a Point isn't "employment") — "present"
-// always outranks any dated end, since it's inherently the most current.
-function getMostRecentExperienceId(timeline) {
-  const experiences = timeline.filter((e) => e.type === "experience");
-  let best = experiences[0];
-  experiences.forEach((e) => {
-    if (getSortableEndDate(e) > getSortableEndDate(best)) best = e;
-  });
-  return best.id;
-}
-
-function getSortableEndDate(entry) {
-  if (entry.dates.end === "present") return Infinity;
-  return new Date(`${entry.dates.end}-01`).getTime();
-}
-
-function extractIncludedIds(apiResponse, allIds, mostRecentId) {
+function extractIncludedPointIds(apiResponse, allPointIds) {
   try {
-    // Claude's reply may include tool-use blocks (from web search) before
-    // the final text block — find the actual text content among them.
     const textBlock = apiResponse.content.find((block) => block.type === "text");
     if (!textBlock) {
-      // No text block at all usually means the response got cut off by
-      // max_tokens before reaching visible output (e.g. mid-reasoning or
-      // mid-tool-use) — logging stop_reason and the block types present
-      // makes that diagnosable from the logs instead of a bare crash.
       const blockTypes = (apiResponse.content || []).map((b) => b.type).join(", ") || "none";
       throw new Error(`No text block in response (stop_reason: ${apiResponse.stop_reason}, blocks: [${blockTypes}])`);
     }
     const parsed = extractJsonObject(textBlock.text);
-    const validIds = new Set(allIds);
-    // Defensive: only trust ids that actually exist in the real data, in
-    // case the model hallucinates or formats something unexpectedly.
-    const filtered = parsed.includedIds.filter((id) => validIds.has(id));
-    if (filtered.length === 0) return enforceMostRecent([mostRecentId], mostRecentId);
-    // No ceiling to enforce here anymore — the result size is whatever
-    // the model's per-entry judgment produced. The only thing still
-    // enforced in code is the one genuine hard rule: recency.
-    return enforceMostRecent(filtered, mostRecentId);
+    const validIds = new Set(allPointIds);
+    return (parsed.includedPointIds || []).filter((id) => validIds.has(id));
   } catch (parseError) {
-    // The API call itself succeeded, but the reply wasn't in the
-    // expected shape — distinct from a network/auth failure, and worth
-    // telling apart in the logs since the fix is different. Logging the
-    // actual raw text (not just the exception) means a failure like
-    // unexpected leading prose is visible in the logs immediately,
-    // rather than needing to reverse-engineer it from a bare error.
     const rawSnippet = (apiResponse.content || [])
       .map((b) => b.text || "")
       .join("")
       .slice(0, 300);
     console.error("curate-timeline: failed to parse Claude's response:", parseError.message, "| raw response:", rawSnippet);
-    return allIds;
+    // Fail open on Points specifically — include all of them rather than
+    // silently dropping optional-but-potentially-valuable content.
+    return allPointIds;
   }
-}
-
-// Code-level guarantee that the most recent entry is present, regardless
-// of whether the model actually followed the prompt instruction above.
-function enforceMostRecent(ids, mostRecentId) {
-  if (ids.includes(mostRecentId)) return ids;
-  return [mostRecentId, ...ids];
 }
 
 // Models sometimes preface structured output with a bit of explanatory
