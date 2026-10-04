@@ -110,6 +110,8 @@ function startLoadingStages() {
 
 let lastCuration = null;       // stored so the resume compiler can reuse it
 let lastJobDescription = "";   // what the resume stages tailor to (see buildJobContext)
+let lastJobInput = "";         // exactly what the visitor typed — shared with you if they get in touch
+let lastResumeTitle = "";      // the professional description their resume used — same reason
 
 // The resume stages never search the web themselves, so the timeline
 // call's research is passed along: if a visitor pasted only a link, the
@@ -140,6 +142,7 @@ function setupJobIntake() {
     if (button.disabled) return;
 
     const jobDescription = textarea.value;
+    lastJobInput = jobDescription;
     textarea.hidden = true;
     button.disabled = true;
     button.hidden = true;
@@ -909,6 +912,7 @@ async function compileResume() {
     finalData.executiveProfile = data.executiveProfile;
   }
 
+  lastResumeTitle = finalData.title;
   return renderResume(finalData);
 }
 
@@ -1088,8 +1092,8 @@ document.addEventListener("click", (event) => {
 // ============================================================
 // LEAD CAPTURE — a popup after 7 seconds on the resume
 // Shown automatically once. Closing it leaves a quiet "Want more
-// information?" button under the resume that reopens it. Submission is
-// mocked pending the backend.
+// information?" button under the resume that reopens it. Submitting sends
+// through /api/submit-lead (see submitLead below).
 // ============================================================
 
 const LEAD_PROMPT_DELAY_MS = 7000;
@@ -1148,22 +1152,63 @@ document.addEventListener("click", (event) => {
 
 document.getElementById("lead-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const email = document.getElementById("lead-email").value;
-  const company = document.getElementById("lead-company").value;
-  submitLead(email, company);
+  submitLead(
+    document.getElementById("lead-email").value,
+    document.getElementById("lead-company").value
+  );
 });
 
-function submitLead(email, company) {
-  // TODO: replace with a real fetch() to a backend endpoint once deployed —
-  // e.g. fetch("/api/submit-lead", { method: "POST", ... }). That endpoint
-  // writes to storage and triggers the video email.
-  console.log("Lead captured (mock):", { email, company });
-  document.dispatchEvent(new CustomEvent("lead:submitted", { detail: { email, company } }));
-  leadSubmitted = true;
-  document.getElementById("lead-form").hidden = true;
-  document.getElementById("lead-confirmation").hidden = false;
-  document.getElementById("lead-close").focus();
-  updateMoreInfoBar();
+let leadSending = false;
+
+// Sends the lead to /api/submit-lead, which emails the visitor a thank-you
+// and emails you the lead. If it fails, the visitor sees your address
+// instead of a "thanks" that isn't true.
+async function submitLead(email, company) {
+  if (leadSending) return;
+  const button = document.querySelector("#lead-form button[type='submit']");
+  const errorEl = document.getElementById("lead-error");
+  const label = button.textContent;
+  leadSending = true;
+  button.disabled = true;
+  button.textContent = "Sending…";
+  errorEl.hidden = true;
+
+  try {
+    const response = await fetch("/api/submit-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        company,
+        website: document.getElementById("lead-website").value, // the honeypot
+        jobInput: lastJobInput.slice(0, 2000),
+        resumeTitle: lastResumeTitle
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      // A validation message from the server is safe to show as is.
+      const fixable = response.status === 400 && typeof result.error === "string";
+      throw Object.assign(new Error(result.error || `Request failed: ${response.status}`), { fixable });
+    }
+
+    document.dispatchEvent(new CustomEvent("lead:submitted", { detail: { email, company } }));
+    leadSubmitted = true;
+    document.getElementById("lead-form").hidden = true;
+    document.getElementById("lead-confirmation").hidden = false;
+    document.getElementById("lead-close").focus();
+    updateMoreInfoBar();
+  } catch (error) {
+    console.error("Lead submission failed:", error);
+    errorEl.textContent = error.fixable
+      ? error.message
+      : `Sorry, that didn't go through. You can email me directly at ${profile.email}.`;
+    errorEl.hidden = false;
+    button.disabled = false;
+    button.textContent = label;
+  } finally {
+    leadSending = false;
+  }
 }
 
 // ============================================================

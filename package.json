@@ -1,0 +1,8 @@
+{
+  "name": "resume-site",
+  "private": true,
+  "description": "Christian Schlaefer's interactive resume site",
+  "dependencies": {
+    "nodemailer": "^6.9.0"
+  }
+}

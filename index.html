@@ -103,8 +103,9 @@
       </div>
     </div>
 
-    <!-- Email popup: appears after 7 seconds on the resume. Submission is
-         mocked — see submitLead() in main.js — pending the backend. -->
+    <!-- Email popup: appears after 7 seconds on the resume. Submitting sends
+         the visitor a thank-you and you the lead — see submitLead() in main.js
+         and api/submit-lead.js. -->
     <div id="lead-dialog" role="dialog" aria-modal="true" aria-labelledby="lead-title" hidden>
       <div class="lead-card">
         <button id="lead-close" type="button" aria-label="Close">
@@ -113,11 +114,18 @@
         <h2 id="lead-title">Want more information?</h2>
         <p class="lead-intro">Leave your email and company and I'll get in touch — I'll even send you a short video walkthrough about how this site was built.</p>
         <form id="lead-form">
+          <!-- Honeypot: hidden from people, irresistible to bots. A filled-in
+               value tells the server to quietly ignore the submission. -->
+          <div class="lead-honeypot" aria-hidden="true">
+            <label for="lead-website">Website</label>
+            <input type="text" id="lead-website" name="website" tabindex="-1" autocomplete="off">
+          </div>
           <label for="lead-email">Email</label>
           <input type="email" id="lead-email" autocomplete="email" required>
           <label for="lead-company">Company</label>
           <input type="text" id="lead-company" autocomplete="organization" required>
           <button type="submit">Get in Touch with Christian</button>
+          <p id="lead-error" role="alert" hidden></p>
         </form>
         <p id="lead-confirmation" role="status" hidden>Thanks — I'll be in touch soon, video walkthrough included.</p>
       </div>

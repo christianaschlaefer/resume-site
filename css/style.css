@@ -2018,6 +2018,28 @@ body {
   margin-top: 24px;
 }
 
+/* Off-screen rather than display:none — some bots skip fields that are
+   display:none, but happily fill ones that are merely out of view. */
+.lead-honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+#lead-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+#lead-error {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--seal);
+}
+
 #lead-confirmation {
   margin: 0;
   font-size: 15.5px;

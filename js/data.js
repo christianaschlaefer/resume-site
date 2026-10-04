@@ -666,6 +666,8 @@ const details = {};
 
 const profile = {
   name: "Christian Schlaefer",
+  // Shown to visitors as a fallback if the "get in touch" form can't send.
+  email: "christian.a.schlaefer@gmail.com",
   descriptionOptions: [
     "Technical Program & Implementation Leader",
     "Technical Program & International Operations Leader",

@@ -122,3 +122,19 @@ Compare the compiled resume against the RESUME - BASE template:
   sentence lines (Construction, International Experience) are verbatim.
 - Education lines use the "Degree | Institution | Location | Year" format.
 - Still exactly two pages, with no large gap at the bottom of page 1.
+
+## Lead email checks (after setup, and after any change to submit-lead.js)
+- Submit the popup with an address you control (not your Gmail): the button
+  shows "Sending…", then the thank-you. Within a minute that address receives
+  a thank-you FROM your Gmail (check spam the first time), with the video link
+  if WALKTHROUGH_VIDEO_URL is set — and it appears in your Gmail Sent folder.
+- Your inbox receives "New resume lead: <company>" with the email, company,
+  resume title shown, and what they typed. Hitting Reply addresses the visitor.
+- Reply to the thank-you from the test address: it threads in your inbox as a
+  normal conversation.
+- With GMAIL_APP_PASSWORD removed, the popup shows the "email me directly"
+  fallback instead of a false thank-you (Vercel logs say "not configured").
+- A 4th submission from the same connection within 10 minutes shows the
+  "email me directly" message (built-in limit), and a second submission with
+  the same email address in a day sends no second thank-you — your
+  notification flags it instead.
