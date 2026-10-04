@@ -275,18 +275,14 @@ body {
   gap: 16px;
 }
 
-/* Ruled writing paper: the lines scroll with the text. */
 #job-intake-form textarea {
   min-height: 132px;
-  padding: 4px 14px;
+  padding: 12px 14px;
   font: inherit;
   font-size: 16px;
-  line-height: 32px;
+  line-height: 1.55;
   color: var(--ink);
-  background-color: var(--card);
-  background-image: repeating-linear-gradient(transparent 0, transparent 31px, var(--hair) 31px, var(--hair) 32px);
-  background-attachment: local;
-  background-position: 0 4px;
+  background: var(--card);
   border: 1px solid var(--rule);
   border-radius: 3px;
   resize: vertical;
@@ -549,6 +545,11 @@ body {
   height: 3px;
   background: repeating-linear-gradient(90deg, var(--edu) 0 7px, transparent 7px 11px);
   opacity: 0.75;
+}
+
+.edu-line.is-continuing {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 56px);
+  mask-image: linear-gradient(to right, transparent, #000 56px);
 }
 
 .edu-line.is-open-ended::after {
@@ -961,6 +962,14 @@ body {
   background: var(--edu);
 }
 
+.edu-start.is-continuing .edu-node {
+  display: none;
+}
+
+.edu-start.is-continuing .edu-start-pill {
+  left: 92px;
+}
+
 .edu-start-pill {
   position: absolute;
   left: 9px;
@@ -1100,7 +1109,8 @@ body {
   opacity: 0;
   transform: translateY(-8px) rotate(-0.6deg);
   transform-origin: var(--hole-x, 50%) 0;
-  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s, box-shadow 0.25s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s, box-shadow 0.25s ease,
+    left 0.3s ease, top 0.3s ease, width 0.3s ease;
 }
 
 /* The punched, reinforced hole where the string meets the tag. */
@@ -1122,12 +1132,43 @@ body {
   visibility: visible;
   opacity: 1;
   transform: none;
-  transition-delay: 0.15s, 0.15s, 0s, 0s;
+  transition-delay: 0.15s, 0.15s, 0s, 0s, 0s, 0s, 0s;
 }
 
+/* Opened: the tag lifts off its string into a large reading card (full
+   width on a phone), positioned by setExpandedUi in timeline.js. */
 .point.is-expanded .point-card {
-  box-shadow: 0 1px 0 rgba(29, 43, 58, 0.05), 0 22px 40px -22px rgba(29, 43, 58, 0.5);
+  left: var(--open-left, var(--card-offset));
+  top: var(--open-top, var(--stem));
+  width: var(--open-w, var(--point-card-w));
+  max-height: var(--open-maxh, var(--point-max, 240px));
+  padding: 20px 22px 14px;
+  border: 2px solid var(--ink-2);
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgba(29, 43, 58, 0.05), 0 26px 48px -24px rgba(29, 43, 58, 0.55);
   touch-action: pan-y;
+}
+
+.point.is-expanded .point-card::before,
+.point.is-expanded .point-stem {
+  opacity: 0;
+}
+
+.point-stem {
+  transition: transform 0.4s ease, opacity 0.2s ease;
+}
+
+.point.is-expanded .point-title {
+  font-size: 20px;
+}
+
+.point.is-expanded .point-role {
+  font-size: 14px;
+}
+
+.point.is-expanded .point-list {
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .point-title {
@@ -1384,10 +1425,11 @@ body {
   font-size: 18px;
 }
 
+/* Five totals in two columns, so they fit the dock's height. */
 #skill-tier-counts {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 14px;
 }
 
 .tier-count {
@@ -1440,36 +1482,43 @@ body {
   transform: translateY(4px);
 }
 
-.skill-token[data-tier="2"] {
+.skill-token[data-tier="3"],
+.skill-token[data-tier="4"] {
   border-color: var(--rule);
 }
 
-.skill-token[data-tier="3"] {
+.skill-token[data-tier="5"] {
   color: var(--ink);
   font-weight: 600;
   border-color: var(--foil-light);
 }
 
-/* Tier pips: one, two, or three filled — gold foil at Expert. */
+/* Tier pips: one to four filled in ink — all five in gold foil at Expert. */
 .skill-pips {
   display: inline-flex;
   gap: 2px;
 }
 
+.skill-pips {
+  gap: 1.5px;
+}
+
 .skill-pips i {
-  width: 4px;
-  height: 4px;
+  width: 3.5px;
+  height: 3.5px;
   border-radius: 50%;
   background: var(--hair);
   transition: background 0.3s ease;
 }
 
 [data-tier="1"] .skill-pips i:nth-child(1),
-[data-tier="2"] .skill-pips i:nth-child(-n + 2) {
+[data-tier="2"] .skill-pips i:nth-child(-n + 2),
+[data-tier="3"] .skill-pips i:nth-child(-n + 3),
+[data-tier="4"] .skill-pips i:nth-child(-n + 4) {
   background: var(--ink-2);
 }
 
-[data-tier="3"] .skill-pips i {
+[data-tier="5"] .skill-pips i {
   background: var(--foil);
 }
 

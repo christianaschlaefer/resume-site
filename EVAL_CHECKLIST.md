@@ -77,18 +77,23 @@ desktop browser and once on a phone:
   Page Up/Down, Home/End, and the ‹ › buttons all move through time.
 - Each role's card stays pinned at the playhead for its period, then the
   next role bumps it out. Concurrent roles (the campaign) stay docked beside
-  the main card for their WHOLE period. The current role stays pinned to Today.
+  the main card for their WHOLE period. No card ever runs past Today — the
+  current role's trailing edge stops at the end of the line.
 - Education shows a "started" label, a dashed study line below the axis,
   and a graduation station (UVM ends open, with no degree) — no false gaps.
+  The American School in Japan's line is already running when the timeline
+  opens and ends at its May 2014 graduation.
 - Points fade in a little BEFORE the playhead reaches them and out a little
   after; no date is shown on a Point card.
-- Skills enter the ledger as roles are reached and upgrade Professional →
-  Advanced → Expert on repeats (gold pips at Expert); scrolling back
+- Skills enter the ledger as roles are reached and upgrade Familiar →
+  Applied → Professional → Advanced → Expert on repeats (five gold pips at
+  Expert; a skill listed twice in one role counts twice); scrolling back
   retracts them. The ledger never shows a scrollbar; "See all" lists every
   skill by tier and locks the timeline while open.
 - Opening a card makes it wider and taller (growing down over the receded
   timeline) and LOCKS the timeline: the wheel scrolls only the card, and
-  Escape closes it.
+  Escape closes it. An opened Point lifts into a large reading card (full
+  width on a phone).
 - Reaching the end centers "Your tailored resume" for a moment, then the
   resume opens. After 7 seconds an email popup appears; closing it leaves a
   "Want more information?" button under the resume.

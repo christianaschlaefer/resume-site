@@ -32,12 +32,16 @@
 //   education — separate array below; always shown, never AI-judged.
 //       start / end: "YYYY-MM" — draws a "started" node and a study line
 //                    below the axis, ending at the graduation station
+//       enrolledAtStart: true — instead of `start`: already in school when
+//                    the timeline begins (the line runs from the first frame)
 //       noDegree:    true — the line ends without a graduation station
 //       onResume:    false — timeline only
 //   skills (any entry) — drive the timeline's skill archive only. They are
 //     NEVER sent to the AI, so an inferred skill can't leak into a resume
-//     bullet as if it were a stated fact. Tiers come from repetition:
-//     1 entry = Professional, 2 = Advanced, 3+ = Expert.
+//     bullet as if it were a stated fact. Every listing counts once — list a
+//     skill more than once in the same entry to show depth there. Tiers:
+//     1 listing = Familiar, 2 = Applied, 3 = Professional, 4 = Advanced,
+//     5 or more = Expert.
 // ============================================================
 
 const timeline = [
@@ -66,64 +70,139 @@ const timeline = [
       "Lead cross-functional project teams of up to 12–15 participants across implementation, technical, commercial, and customer organizations; serve as a formal mentor and technical resource for implementation professionals."
     ],
     skills: [
-      "Technical Program Leadership",
-      "Enterprise SaaS Implementation",
-      "Organizational & Cross-Functional Leadership",
-      "Executive Stakeholder Management",
-      "Technical Solution Configuration",
-      "ERP & Financial-System Integrations",
-      "APIs & Data Integration",
-      "Risk & Escalation Management",
-      "Revenue Realization & Expansion",
-      "Process Improvement",
-      "Commercial Strategy",
-      "Training & Mentorship",
-      "Cross-Functional Program Delivery",
-      "Product Validation & Technical Feedback",
-      "Technical Requirements Translation",
+      "Program Management",
+      "Project Management",
+      "Project Management",
+      "Project Management",
       "Strategic Program Leadership",
       "Business Transformation",
-      "Program Recovery & Escalation",
-      "Project Prioritization",
-      "Organizational Change & Adoption",
-      "Vendor & Stakeholder Coordination",
-      "Systems Integration & Deployment",
-      "International Operations",
-      "Enterprise Technology",
-      "Testing & Validation",
-      "Training & Operational Adoption",
-      "Emergent Requirements Management",
-      "Client Relationship Management",
-      "SAP Concur Travel, Expense & Invoice",
+      "Strategic Analysis",
+      "Organizational Leadership",
+      "Cross-Functional Team Leadership",
+      "Cross-Functional Team Leadership",
+      "Executive Stakeholder Management",
+      "Requirements Discovery",
+      "Technical Requirements Translation",
+      "Enterprise SaaS Implementation",
+      "Enterprise SaaS Implementation",
+      "Enterprise SaaS Implementation",
       "Enterprise SaaS Configuration",
+      "Enterprise SaaS Configuration",
+      "Systems Integration",
+      "Systems Integration",
+      "ERP Integration",
+      "ERP Integration",
       "APIs",
+      "Data Mapping",
+      "Schema Mapping",
+      "Integration Troubleshooting",
+      "Testing & Validation",
+      "Deployment & Operational Adoption",
+      "Deployment & Operational Adoption",
+      "Deployment & Operational Adoption",
+      "Program Recovery",
+      "Risk & Escalation Management",
+      "Risk & Escalation Management",
+      "Process Improvement",
+      "Change Management",
+      "Product Validation & Technical Feedback",
+      "Technology Adoption",
+      "Technology Adoption",
+      "Product Management",
+      "Product Discovery",
+      "Portfolio Management",
+      "Commercial Strategy",
+      "Revenue Realization & Expansion",
+      "Customer Retention",
+      "Account Management",
+      "Account Management",
+      "Customer Success",
+      "Customer Success",
+      "Customer Engagement",
+      "Customer Engagement",
+      "Training & Mentorship",
+      "Training & Mentorship",
+      "Training & Mentorship",
+      "Public Speaking & Presentation",
+      "Public Speaking & Presentation",
+      "Public Speaking & Presentation",
+      "Executive Presentations",
+      "Executive Presentations",
+      "Executive Presentations",
+      "Executive Presentations",
+      "Strategic Communications",
+      "Strategic Communications",
+      "Cross-Cultural Communication",
+      "International Stakeholder Management",
       "XML",
       "SFTP",
-      "Flat-File Integrations",
-      "Data Mapping",
-      "Identity/SSO",
-      "SQL Familiarity",
-      "Multi-ERP Environments",
-      "Jira",
-      "Gainsight",
-      "SAP ERP",
-      "Oracle",
-      "QuickBooks",
-      "Sage",
+      "Flat-File Integration",
+      "Identity & SSO",
+      "SQL",
+      "Microsoft Office",
+      "Microsoft Excel",
       "Salesforce",
       "ServiceNow",
-      "Microsoft Excel",
-      "Integration Troubleshooting",
-      "Multi-Stage Deployment & Operational Adoption",
-      "Microsoft Copilot",
-      "WalkMe",
-      "Microsoft Office Suite",
-      "SAP Project Management (Certified)",
-      "Concur Expense (Certified)",
-      "Concur Invoice (Certified)",
+      "Jira",
+      "SAP ERP",
+      "Oracle ERP",
+      "QuickBooks",
+      "Sage",
+      "SAP Concur Expense & Invoice",
+      "SAP Concur Expense & Invoice",
+      "SAP Concur Expense & Invoice",
+      "SAP Concur Expense & Invoice",
+      "Agile Methodologies",
+      "Agile Methodologies",
+      "Agile Methodologies",
+      "Scrum",
+      "Waterfall Project Management",
+      "Waterfall Project Management",
+      "Hybrid Project Delivery",
+      "Hybrid Project Delivery",
+      "Hybrid Project Delivery",
+      "Hybrid Project Delivery",
+      "SAP Project Management",
+      "SAP Project Management",
+      "SAP Project Management",
       "SAP RISE",
-      "SAP GROW",
-      "Challenger Sales"
+      "SAP RISE",
+      "SAP RISE",
+      "SAP RISE",
+      "Continuous Improvement",
+      "Continuous Improvement",
+      "Writing & Communication",
+      "Customer Service",
+      "AI",
+      "Program Management",
+      "Program Management",
+      "Executive Stakeholder Management",
+      "Executive Stakeholder Management",
+      "Strategic Program Leadership",
+      "Program Recovery",
+      "Program Recovery",
+      "Program Recovery",
+      "Risk & Escalation Management",
+      "Risk & Escalation Management",
+      "Technical Requirements Translation",
+      "Technical Requirements Translation",
+      "Requirements Discovery",
+      "Change Management",
+      "Enterprise SaaS Implementation",
+      "Enterprise SaaS Implementation",
+      "ERP Integration",
+      "ERP Integration",
+      "ERP Integration",
+      "Systems Integration",
+      "Systems Integration",
+      "Integration Troubleshooting",
+      "Integration Troubleshooting",
+      "Integration Troubleshooting",
+      "Enterprise SaaS Configuration",
+      "Enterprise SaaS Configuration",
+      "Deployment & Operational Adoption",
+      "Data Mapping",
+      "SAP Concur Expense & Invoice"
     ],
     details: []
   },
@@ -142,16 +221,35 @@ const timeline = [
       "Managed independent contractors, vendors, creative development, production, procurement, campaign strategy, public communications, and stakeholder engagement across a competitive federal race; developed relationships with elected officials and community leaders throughout Iowa and won the Iowa Caucus straw poll for Iowa's 4th Congressional District."
     ],
     skills: [
-      "Organizational & Cross-Functional Leadership",
       "Strategic Program Leadership",
-      "Volunteer Recruitment & Management",
-      "Vendor & Stakeholder Coordination",
-      "Public Communications",
-      "Public Speaking",
-      "Community Engagement",
+      "Strategic Analysis",
+      "Organizational Leadership",
+      "Organizational Leadership",
+      "Cross-Functional Team Leadership",
+      "Public Speaking & Presentation",
+      "Public Speaking & Presentation",
+      "Executive Presentations",
+      "Executive Presentations",
+      "Strategic Communications",
+      "Strategic Communications",
+      "Strategic Communications",
+      "Strategic Communications",
+      "Cross-Cultural Communication",
+      "Regulatory Compliance",
+      "Business Operations",
+      "Operations Management",
+      "Logistics Coordination",
+      "Vendor Management",
+      "Contract & Vendor Negotiation",
+      "Contract & Vendor Negotiation",
       "Procurement",
       "Budget Management",
-      "Field Operations"
+      "Budget Management",
+      "Microsoft Office",
+      "Microsoft Excel",
+      "CRM",
+      "Policy Analysis",
+      "Writing & Communication"
     ],
     details: []
   },
@@ -169,15 +267,41 @@ const timeline = [
       "Directed provider engagement and technology-adoption strategy in coordination with field and commercial teams, producing 20%+ quarter-over-quarter adoption growth during 2021 and routinely positioning the territory among the organization's strongest performers."
     ],
     skills: [
-      "Organizational Change & Adoption",
-      "Training & Operational Adoption",
+      "Strategic Program Leadership",
+      "Cross-Functional Team Leadership",
       "Executive Stakeholder Management",
-      "Public Speaking",
-      "Client Relationship Management",
+      "Requirements Discovery",
+      "Deployment & Operational Adoption",
+      "Change Management",
+      "Technology Adoption",
+      "Product Management",
+      "Product Discovery",
+      "Portfolio Management",
       "Commercial Strategy",
-      "Consultative Sales",
-      "Healthcare Technology",
-      "Microsoft Office Suite"
+      "Revenue Realization & Expansion",
+      "Customer Retention",
+      "Account Management",
+      "Customer Success",
+      "Customer Engagement",
+      "Consultative Selling",
+      "Sales Strategy",
+      "Challenger Sales",
+      "Challenger Sales",
+      "Challenger Sales",
+      "Business Development",
+      "Territory Management",
+      "Training & Mentorship",
+      "Public Speaking & Presentation",
+      "Executive Presentations",
+      "Strategic Communications",
+      "Strategic Communications",
+      "Regulated Industry Operations",
+      "Regulatory Compliance",
+      "Operations Management",
+      "Microsoft Office",
+      "CRM",
+      "Customer Service",
+      "Program Management"
     ],
     details: []
   },
@@ -194,14 +318,28 @@ const timeline = [
       "Managed multi-phase international programs serving hundreds of participants, coordinating execution across government officials, U.S. Embassy personnel, NGOs, and institutional partners while working on-site in Bucharest for 4+ months; delivered against budget, scope, and quality requirements."
     ],
     skills: [
-      "Cross-Functional Program Delivery",
+      "Program Management",
+      "Project Management",
+      "Strategic Program Leadership",
+      "Product Management",
+      "Customer Engagement",
+      "Training & Mentorship",
+      "Public Speaking & Presentation",
+      "Executive Presentations",
+      "Strategic Communications",
+      "Strategic Communications",
       "International Operations",
-      "Vendor & Stakeholder Coordination",
-      "Executive Stakeholder Management",
+      "International Program Management",
+      "Global Program Delivery",
       "Cross-Cultural Communication",
-      "Budget Management",
+      "International Stakeholder Management",
+      "Government & Institutional Stakeholder Engagement",
+      "Business Operations",
+      "Operations Management",
       "Logistics Coordination",
-      "Microsoft Office Suite"
+      "Microsoft Office",
+      "Writing & Communication",
+      "Public Speaking & Presentation"
     ],
     details: []
   },
@@ -219,14 +357,27 @@ const timeline = [
       "Developed a proactive banker-advisor engagement strategy that drove 167% growth in first-time investor activity by replacing passive referral practices with targeted client identification."
     ],
     skills: [
-      "Consultative Sales",
-      "Client Relationship Management",
-      "Financial Services",
-      "Customer Service",
-      "Commercial Strategy",
+      "Strategic Analysis",
+      "Cross-Functional Team Leadership",
+      "Executive Stakeholder Management",
+      "Requirements Discovery",
       "Process Improvement",
-      "Microsoft Office Suite",
-      "Microsoft Excel"
+      "Change Management",
+      "Portfolio Management",
+      "Customer Retention",
+      "Account Management",
+      "Customer Success",
+      "Customer Engagement",
+      "Consultative Selling",
+      "Sales Strategy",
+      "Business Development",
+      "Territory Management",
+      "Public Speaking & Presentation",
+      "Regulatory Compliance",
+      "Business Operations",
+      "Microsoft Office",
+      "Microsoft Excel",
+      "CRM"
     ],
     details: []
   },
@@ -246,11 +397,15 @@ const timeline = [
       "Supported U.S. diplomatic mission operations in General Services, coordinating motor-pool scheduling, official movements, and transport of sensitive identity documents; selected for motorcade support during a visit by the U.S. Under Secretary of Energy, serving in the lead vehicle for advance arrival, staging, and airport-movement coordination."
     ],
     skills: [
-      "Logistics Coordination",
       "International Operations",
+      "International Program Management",
       "Cross-Cultural Communication",
-      "Security Protocols",
-      "Microsoft Office Suite"
+      "Government & Institutional Stakeholder Engagement",
+      "Diplomatic Mission Operations",
+      "Regulated Industry Operations",
+      "Operations Management",
+      "Logistics Coordination",
+      "Microsoft Office"
     ],
     details: []
   },
@@ -266,14 +421,14 @@ const timeline = [
       "Built a local LLM-assisted prototype that compares ERP source schemas with target integration templates, retrieves relevant technical documentation, and generates source-grounded field-mapping recommendations with confidence flags and supporting rationale."
     ],
     skills: [
+      "AI-Assisted Workflow Design",
       "LLM API Integration",
       "Retrieval-Augmented Generation (RAG)",
-      "Embeddings & Vector Search",
-      "Python",
-      "Data Mapping",
-      "ERP & Financial-System Integrations",
       "AI Evaluation & Confidence Handling",
-      "Prompt & Context Management"
+      "Data Mapping",
+      "Schema Mapping",
+      "Testing & Validation",
+      "AI"
     ]
   },
   {
@@ -297,7 +452,9 @@ const timeline = [
       "Structured Outputs & Tool Calling",
       "APIs",
       "Testing & Validation",
-      "Web Accessibility"
+      "Web Accessibility",
+      "AI",
+      "AI-Assisted Workflow Design"
     ]
   },
   {
@@ -311,14 +468,16 @@ const timeline = [
       "Practical experience across concrete, structural framing, roofing, building-envelope and waterproofing systems; interior finish work, and mechanical/electrical coordination; routinely evaluate products and construction methods for performance, cost, and constructability."
     ],
     skills: [
-      "Construction Management",
+      "Project Management",
+      "Contract & Vendor Negotiation",
       "Procurement",
-      "Vendor & Stakeholder Coordination",
       "Budget Management",
-      "Concrete & Structural Framing",
-      "Roofing & Building Envelope",
-      "Mechanical & Electrical Coordination",
-      "Cost & Constructability Analysis"
+      "Construction Project Management",
+      "Construction Materials Evaluation",
+      "Construction Materials Evaluation",
+      "Microsoft Office",
+      "Microsoft Excel",
+      "Small Business Operations"
     ]
   },
   {
@@ -332,10 +491,7 @@ const timeline = [
       "Market and sell our own product directly to customers, including order fulfillment, shipping, local delivery, and the day-to-day upkeep and improvement of the farm."
     ],
     skills: [
-      "Livestock Management",
       "Small Business Operations",
-      "Direct-to-Consumer Sales",
-      "Order Fulfillment",
       "Customer Service"
     ]
   },
@@ -350,9 +506,7 @@ const timeline = [
       "Managed football equipment and logistics operations, including inventory, equipment issue/return, travel packing and itemization, storage, and practice-field setup; supervised 2–3 student staff under the coaching organization."
     ],
     skills: [
-      "Inventory Management",
       "Logistics Coordination",
-      "Team Supervision",
       "Operations Management"
     ]
   },
@@ -365,14 +519,7 @@ const timeline = [
     bullets: [
       "Serve as a volunteer firefighter supporting basic fireground operations, including interior entry, suppression support, scene safety, equipment readiness, and EMS assistance; Iowa Firefighter I certified."
     ],
-    skills: [
-      "Emergency Response",
-      "Fireground Operations",
-      "EMS Assistance",
-      "Scene Safety",
-      "Teamwork & Discipline",
-      "Iowa Firefighter I (Certified)"
-    ]
+    skills: []
   },
   {
     type: "point",
@@ -386,10 +533,8 @@ const timeline = [
     ],
     skills: [
       "Training & Mentorship",
-      "Training Program Design",
-      "Emergency Response",
-      "Scene Safety",
-      "Leadership Development"
+      "Organizational Leadership",
+      "Safety & Training Leadership"
     ]
   },
   {
@@ -403,10 +548,8 @@ const timeline = [
       "Participate in broader church life and congregational affairs, supporting service planning, pastoral needs, and community engagement as requested."
     ],
     skills: [
-      "Public Speaking",
-      "Writing & Communication",
-      "Community Engagement",
-      "Event Planning"
+      "Public Speaking & Presentation",
+      "Training & Mentorship"
     ]
   },
   {
@@ -452,8 +595,13 @@ const education = [
     end: "2020-05",
     year: "2020",
     skills: [
-      "Research & Analysis", "Policy Analysis", "Security Studies", "Writing & Communication", "Public Speaking",
-      "Russian (Basic Conversational)", "Arabic (University Study)"
+      "Research & Analysis",
+      "Policy Analysis",
+      "Security Studies",
+      "Writing & Communication",
+      "Russian (Basic Conversational)",
+      "Arabic (University Study)",
+      "Public Speaking & Presentation"
     ]
   },
   {
@@ -466,7 +614,10 @@ const education = [
     start: "2015-09",
     end: "2017-06",
     year: "2017",
-    skills: ["Business Fundamentals", "Accounting Fundamentals", "Business Communication", "Microsoft Office Suite"]
+    skills: [
+      "Business Operations",
+      "Budget Management"
+    ]
   },
   {
     type: "education",
@@ -481,7 +632,26 @@ const education = [
     note: "Some coursework, no degree received",
     onResume: false, // timeline only — the resume's Education section stays as your template defines it
     bullets: ["Enrolled in the Army ROTC program alongside undergraduate coursework."],
-    skills: ["Leadership Development", "Teamwork & Discipline", "Physical Fitness Training", "Land Navigation", "Military Customs & Courtesies"]
+    skills: [
+      "Organizational Leadership"
+    ]
+  },
+  {
+    type: "education",
+    id: "edu-asij",
+    degree: "High School Diploma",
+    institution: "The American School in Japan",
+    location: "Tokyo, Japan",
+    // Already enrolled when the timeline begins: the study line is running
+    // from the first frame and ends at graduation.
+    enrolledAtStart: true,
+    end: "2014-05",
+    year: "2014",
+    onResume: false, // timeline only
+    skills: [
+      "Cross-Cultural Communication",
+      "Writing & Communication"
+    ]
   }
 ];
 

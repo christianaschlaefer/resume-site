@@ -236,19 +236,25 @@ function deriveResumeSelectionFromCuration(curation) {
 // recomputed from scratch from whatever the playhead has reached, so
 // scrolling backward is exactly as correct as scrolling forward.
 //
-// Tiers come from repetition across roles and experiences:
-//   1 = Professional · 2 = Advanced · 3 or more = Expert
+// Tiers come from how often a skill is listed across roles and experiences
+// (a skill listed more than once in the same entry counts each time, to
+// show depth there):
+//   1 Familiar · 2 Applied · 3 Professional · 4 Advanced · 5 or more Expert
 // The dock shows the most recently gained or upgraded skills first (what
 // the visitor just scrolled past); "See all" groups everything by tier.
 // ============================================================
 
-const TIER_NAMES = { 1: "Professional", 2: "Advanced", 3: "Expert" };
+const TIER_NAMES = { 1: "Familiar", 2: "Applied", 3: "Professional", 4: "Advanced", 5: "Expert" };
 const TIER_NOTES = {
-  3: "Used across three or more roles and experiences",
-  2: "Used across two roles and experiences",
-  1: "Used in one role or experience"
+  5: "Used five or more times across roles and experiences",
+  4: "Used four times across roles and experiences",
+  3: "Used three times across roles and experiences",
+  2: "Used twice across roles and experiences",
+  1: "Used once"
 };
-const tierOf = (count) => (count >= 3 ? 3 : count === 2 ? 2 : 1);
+const PIPS_HTML = '<span class="skill-pips" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>';
+const TOP_TIER = 5;
+const tierOf = (count) => Math.min(Math.max(count, 1), TOP_TIER);
 
 let skillState = new Map();      // name -> { count, tier, pos }
 const skillElements = new Map(); // name -> its token in the dock
@@ -315,7 +321,7 @@ function updateSkillArchive(reachedIds) {
 }
 
 function skillTokenHtml(name, tier) {
-  return `<span class="skill-pips" aria-hidden="true"><i></i><i></i><i></i></span><span class="skill-name">${name}</span><span class="sr-only">, ${TIER_NAMES[tier]}</span>`;
+  return `${PIPS_HTML}<span class="skill-name">${name}</span><span class="sr-only">, ${TIER_NAMES[tier]}</span>`;
 }
 
 function setTokenTier(token, name, s) {
@@ -367,19 +373,19 @@ function renderSkillDock(added, upgraded, removed) {
     }, Math.min(i, 12) * 70);
   });
 
-  const counts = { 1: 0, 2: 0, 3: 0 };
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   skillState.forEach((s) => { counts[s.tier] += 1; });
-  document.getElementById("skill-tier-counts").innerHTML = [3, 2, 1]
-    .map((t) => `<span class="tier-count" data-tier="${t}"><span class="skill-pips" aria-hidden="true"><i></i><i></i><i></i></span>${counts[t]} ${TIER_NAMES[t]}</span>`)
+  document.getElementById("skill-tier-counts").innerHTML = [5, 4, 3, 2, 1]
+    .map((t) => `<span class="tier-count" data-tier="${t}">${PIPS_HTML}${counts[t]} ${TIER_NAMES[t]}</span>`)
     .join("");
   document.getElementById("skill-count").textContent = skillState.size;
   if (!document.getElementById("skill-panel").hidden) renderSkillPanel();
 }
 
 function renderSkillPanel() {
-  const groups = { 1: [], 2: [], 3: [] };
+  const groups = { 1: [], 2: [], 3: [], 4: [], 5: [] };
   skillState.forEach((s, name) => groups[s.tier].push(name));
-  const html = [3, 2, 1].filter((t) => groups[t].length).map((t) => `
+  const html = [5, 4, 3, 2, 1].filter((t) => groups[t].length).map((t) => `
     <section class="skill-group" data-tier="${t}">
       <h3>${TIER_NAMES[t]} <span class="skill-group-count">${groups[t].length}</span></h3>
       <p class="skill-group-note">${TIER_NOTES[t]}</p>

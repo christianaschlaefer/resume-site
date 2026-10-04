@@ -174,17 +174,17 @@ const Timeline = (() => {
         if (!entry.noDegree && gradIdx !== null) {
           stations.push({ id: entry.id, kind: "station", entry, idx: endIdx, hasLine: true });
         }
+      } else if (entry.enrolledAtStart && gradIdx !== null) {
+        // Already in school when the story begins: the line's start is set
+        // to the timeline's first moment once that's known (below), so it
+        // never stretches the timeline backward.
+        eduLines.push({ id: `${entry.id}--start`, kind: "edu-start", entry, startIdx: null, endIdx: gradIdx, noDegree: Boolean(entry.noDegree), continuing: true });
+        if (!entry.noDegree) {
+          stations.push({ id: entry.id, kind: "station", entry, idx: gradIdx, hasLine: true });
+        }
       } else if (gradIdx !== null) {
         stations.push({ id: entry.id, kind: "station", entry, idx: gradIdx, hasLine: false });
       }
-    });
-    // Overlapping study lines stack downward, one row each.
-    const eduRows = [];
-    [...eduLines].sort((a, b) => a.startIdx - b.startIdx).forEach((line) => {
-      let row = eduRows.findIndex((end) => line.startIdx >= end);
-      if (row === -1) { row = eduRows.length; eduRows.push(0); }
-      eduRows[row] = line.endIdx;
-      line.eduLane = row;
     });
 
     const laneCount = assignLanes(journey);
@@ -199,13 +199,26 @@ const Timeline = (() => {
 
     const marks = [];
     journey.forEach((j) => marks.push(j.startIdx, j.effEndIdx));
-    eduLines.forEach((l) => marks.push(l.startIdx, l.endIdx));
+    eduLines.forEach((l) => {
+      if (l.startIdx !== null) marks.push(l.startIdx);
+      marks.push(l.endIdx);
+    });
     points.forEach((p) => marks.push(p.idx));
     stations.forEach((s) => marks.push(s.idx));
     const startIdx = marks.length ? Math.floor(Math.min(...marks)) : now - 12;
     // The axis always runs up to today, so the current role ends at "now"
     // and is naturally the last thing on the line.
     const endIdx = Math.max(now + 1, marks.length ? Math.ceil(Math.max(...marks)) : now + 1);
+
+    eduLines.forEach((l) => { if (l.continuing) l.startIdx = Math.min(startIdx, l.endIdx); });
+    // Overlapping study lines stack downward, one row each.
+    const eduRows = [];
+    [...eduLines].sort((a, b) => a.startIdx - b.startIdx).forEach((line) => {
+      let row = eduRows.findIndex((end) => line.startIdx >= end);
+      if (row === -1) { row = eduRows.length; eduRows.push(0); }
+      eduRows[row] = line.endIdx;
+      line.eduLane = row;
+    });
 
     const byId = new Map();
     [...journey, ...stations, ...points, ...eduLines].forEach((item) => byId.set(item.id, item));
@@ -316,6 +329,25 @@ const Timeline = (() => {
       if (!changed) break;
     }
 
+    // (3) A concurrent card stays docked for its whole period, then exits
+    // without ever passing Today. Its right edge sits a card-width (plus its
+    // side-by-side offset, on wide screens) beyond the playhead, so if its
+    // period ends closer to Today than that, the stretch between its end and
+    // Today is widened just enough. Labels stay truthful; time is only
+    // locally stretched, exactly as for short roles.
+    const wide = wideLanesFor(m, mdl.laneCount);
+    mdl.journey.forEach((j) => {
+      if (j.lane === 0 || j.present) return;
+      if (mdl.journey.some((o) => o !== j && o.lane === j.lane && o.startIdx >= j.effEndIdx)) return; // the next card bumps it instead
+      const needed = m.cardW + (wide ? j.lane * (m.cardW + m.laneGap) : 0);
+      const inside = segs.filter((s) => s.from >= j.effEndIdx - 1e-9 && s.to <= mdl.endIdx + 1e-9);
+      const width = inside.reduce((sum, s) => sum + s.w, 0);
+      if (width > 0 && width < needed) {
+        const factor = needed / width;
+        inside.forEach((s) => { s.w *= factor; });
+      }
+    });
+
     let x = m.leadIn;
     segs.forEach((s) => { s.x = x; x += s.w; });
     const spanStartX = m.leadIn;
@@ -424,6 +456,12 @@ const Timeline = (() => {
     return pts.length ? Math.max(...pts.map((p) => p.tier)) + 1 : 0;
   }
 
+  // Concurrent lanes sit side by side when there's room, stacked otherwise.
+  // Used by both the scale (to reserve exit room) and the layout.
+  function wideLanesFor(m, laneCount) {
+    return laneCount <= 1 || m.playheadX + laneCount * m.cardW + (laneCount - 1) * m.laneGap + 24 <= m.vw;
+  }
+
   function tierCap(m) {
     const room = m.th - (m.laneTopMin + m.minLaneH + m.axisGap) - m.stemBase - m.pointCardH - 16;
     return clamp(Math.floor(room / (m.pointCardH + m.tierGap)) + 1, 1, 3);
@@ -487,8 +525,7 @@ const Timeline = (() => {
 
     // Concurrent lanes sit side by side when there's room, and stack
     // (secondary cards compact, at the top of the lane area) when not.
-    const lanes = model.laneCount;
-    model.wideLanes = lanes <= 1 || m.playheadX + lanes * m.cardW + (lanes - 1) * m.laneGap + 24 <= m.vw;
+    model.wideLanes = wideLanesFor(m, model.laneCount);
 
     model.journey.forEach((j) => {
       j.x0 = model.timelineLeft + scale.toX(j.startIdx);
@@ -498,18 +535,18 @@ const Timeline = (() => {
       // sticking at exactly the same moments as the main lane's would.
       j.dx = model.wideLanes ? j.lane * (m.cardW + m.laneGap) : 0;
       const localLeft = j.x0 - model.timelineLeft;
-      // A sticky card must be fully pushed out by the time its wrapper
-      // ends, so it would start leaving a card-width BEFORE its period does.
-      // Two cases extend the wrapper so the card stays for the whole period:
-      //  • the ongoing role — pinned through Today until the resume opens;
-      //  • concurrent roles — docked beside the main card for their entire
-      //    span, then pushed out (as far as the next card in that lane allows).
-      // Main-lane roles keep the classic bump: the next role pushes them out.
+      // A sticky card is pushed out as its wrapper ends. Main-lane roles keep
+      // the classic bump (the next role pushes them out), and the current
+      // role's trailing edge stops exactly at Today — no card ever runs past
+      // the end of the line. Concurrent roles get a wrapper extended by up
+      // to a card-width so they stay docked beside the main card for their
+      // whole period — never past the next card in their lane, or Today.
       const nextInLane = model.journey
         .filter((o) => o !== j && o.lane === j.lane && o.startIdx >= j.effEndIdx)
         .reduce((best, o) => (!best || o.startIdx < best.startIdx ? o : best), null);
       const room = nextInLane ? model.timelineLeft + scale.toX(nextInLane.startIdx) - j.x1 : Infinity;
-      const extension = j.present ? m.cardW + m.tail : j.lane > 0 ? Math.max(0, Math.min(m.cardW, room)) : 0;
+      const todayX = model.timelineLeft + scale.toX(model.endIdx);
+      const extension = j.lane > 0 ? Math.max(0, Math.min(m.cardW, room, todayX - j.x1 - j.dx)) : 0;
       j.stickEnd = j.x1 + extension;
       j.wrapEl.style.left = `${localLeft + j.dx}px`;
       j.wrapEl.style.width = `${Math.max(m.cardW, j.stickEnd - j.x0)}px`;
@@ -653,7 +690,9 @@ const Timeline = (() => {
   // "started" node, so either one opens the same details.
   function educationCardHtml(e, cardId) {
     const bullets = e.bullets || [];
-    const dates = e.start ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}` : (e.year || "");
+    const dates = e.start
+      ? `${formatDate(e.start)} – ${formatDate(e.end || String(e.year))}`
+      : e.enrolledAtStart ? `Graduated ${formatDate(e.end || String(e.year))}` : (e.year || "");
     return `
       <div class="station-card" id="${cardId}" data-expand-region aria-hidden="true" inert>
         <p class="card-eyebrow">Education</p>
@@ -670,7 +709,7 @@ const Timeline = (() => {
     const id = attr(e.id);
     return `
       <span class="edu-node" aria-hidden="true"></span>
-      <button class="edu-start-pill" type="button" aria-expanded="false" aria-controls="edu-card-${id}" title="${attr(`Started at ${e.institution}`)}">${e.institution}</button>
+      <button class="edu-start-pill" type="button" aria-expanded="false" aria-controls="edu-card-${id}" title="${attr(l.continuing ? e.institution : `Started at ${e.institution}`)}">${e.institution}</button>
       ${educationCardHtml(e, `edu-card-${id}`)}`;
   }
 
@@ -724,7 +763,7 @@ const Timeline = (() => {
 
     model.eduLines.forEach((l) => {
       const line = document.createElement("div");
-      line.className = `edu-line${l.noDegree ? " is-open-ended" : ""}`;
+      line.className = `edu-line${l.noDegree ? " is-open-ended" : ""}${l.continuing ? " is-continuing" : ""}`;
       segments.appendChild(line);
       l.lineEl = line;
     });
@@ -763,7 +802,7 @@ const Timeline = (() => {
         el.timeline.appendChild(wrap);
       } else if (item.kind === "edu-start") {
         const node = document.createElement("div");
-        node.className = `edu-start${item.noDegree ? " is-no-degree" : ""}`;
+        node.className = `edu-start${item.noDegree ? " is-no-degree" : ""}${item.continuing ? " is-continuing" : ""}`;
         node.dataset.entryId = item.id;
         node.innerHTML = eduStartHtml(item);
         item.el = node;
@@ -976,6 +1015,20 @@ const Timeline = (() => {
 
   function setExpandedUi(item, open) {
     const host = hostFor(item);
+    if (open && item.kind === "point" && metrics && model && model.v) {
+      // An opened Point lifts out of its tag into a large reading card —
+      // full width on a phone — near its spot on the line but always on
+      // screen. (The timeline is locked while it's open, so the position
+      // computed here holds.) Values are relative to the Point's dot.
+      const m = metrics;
+      const width = m.narrow ? m.vw - 32 : Math.min(m.cardWExpanded, 560);
+      const dotScreenX = model.timelineLeft + item.x - el.track.scrollLeft;
+      const screenLeft = clamp(dotScreenX - width / 2, 16, m.vw - 16 - width);
+      host.style.setProperty("--open-left", `${Math.round(screenLeft - dotScreenX)}px`);
+      host.style.setProperty("--open-top", `${m.expandTop - model.v.axisY}px`);
+      host.style.setProperty("--open-w", `${width}px`);
+      host.style.setProperty("--open-maxh", `${m.th - m.expandTop - 14}px`);
+    }
     if (open && item.wrapEl && metrics) {
       // Keep the card's top where it is and let it grow downward; lift it
       // only as much as needed to leave ~560px of room when the screen has it.
@@ -1380,9 +1433,14 @@ const Timeline = (() => {
     scrollToStart() {
       if (model && model.scale) scrollPlayheadTo(model.timelineLeft + model.scale.spanStartX + 2);
     },
-    // Back from the resume → lands inside the current role, just before "Today".
+    // Back from the resume → lands on the current role at the last moment its
+    // card is fully in view (its trailing edge just short of Today).
     scrollToEnd() {
-      if (model && model.scale) scrollPlayheadTo(model.timelineLeft + model.scale.toX(model.endIdx - 0.5));
+      if (!model || !model.scale) return;
+      const todayX = model.timelineLeft + model.scale.toX(model.endIdx);
+      const current = model.journey.find((j) => j.present && j.lane === 0)
+        || model.journey[model.journey.length - 1];
+      scrollPlayheadTo(current ? Math.max(current.x0 + 2, todayX - metrics.cardW - 2) : todayX - 2);
     },
     scrollToOutro() {
       if (model) smoothScrollTo(maxScroll());
