@@ -1,0 +1,13 @@
+Subject: Thanks for checking out my resume
+
+Hi,
+
+Thanks for taking the time to look through my interactive resume. I created this project to showcase some technical skills and continue professional development in the areas that I believe will be most crucial to future business operations.
+
+I've attached a one-page overview of how the site works. It outlines how AI is used to curate the project and the hardcoded guardrails that protect the integrity of the information presented.
+
+Regardless of the role you are hiring for, I'd love to connect further. I'll reach out personally as soon as I am able, but in the meantime you can just reply here to reach my inbox directly - or give me a call/text at 802-363-2433.
+
+Best,
+Christian Schlaefer
+{{site}}
