@@ -20,11 +20,41 @@
 //                           It's a key to your Gmail: it lives only in Vercel.
 //   LEAD_NOTIFY_EMAIL       optional — where lead notifications go (defaults to GMAIL_USER)
 //   WALKTHROUGH_VIDEO_URL   optional — included in the visitor's email when set
+//   SITE_URL                optional — the address the thank-you links to
+//                           (defaults to https://christianschlaefer.com)
+//
+// THE THANK-YOU IS YOURS TO EDIT, no code needed — it lives in the email/
+// folder at the top of the project:
+//   email/thank-you.txt  the subject (first line) and body, in plain text
+//   email/*.pdf          every PDF here is attached; delete one to stop attaching it
+// vercel.json tells Vercel to ship that folder with this function. If either
+// is missing or unreadable, the built-in wording below is used and the email
+// still goes out.
 //
 // Requires the "nodemailer" package (listed in package.json, which Vercel
 // installs automatically on deploy).
 
 const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
+
+const EMAIL_DIR = path.join(process.cwd(), "email");
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // well under Gmail's 25 MB limit
+
+// Used only if email/thank-you.txt is missing or unreadable.
+const DEFAULT_TEMPLATE = `Subject: Thanks for checking out my resume
+
+Hi,
+
+Thanks for taking the time to look through my interactive resume. I appreciate it, and I'll follow up with you personally soon.
+
+{{video}}
+
+If it's easier, just reply here. It comes straight to my inbox.
+
+Best,
+Christian Schlaefer
+{{site}}`;
 
 const EMAIL_PATTERN = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 
@@ -131,7 +161,9 @@ module.exports = async function handler(req, res) {
   }
   const notifyTo = process.env.LEAD_NOTIFY_EMAIL || GMAIL_USER;
   const videoUrl = process.env.WALKTHROUGH_VIDEO_URL || "";
-  const siteUrl = `https://${req.headers.host}`;
+  // The thank-you always links to your own domain — never the vercel.app
+  // address, since spam filters distrust free-hosting links.
+  const siteUrl = (process.env.SITE_URL || "https://christianschlaefer.com").replace(/\/+$/, "");
   const from = { name: "Christian Schlaefer", address: GMAIL_USER };
   const transport = getTransport(GMAIL_USER, GMAIL_APP_PASSWORD);
 
@@ -146,12 +178,16 @@ module.exports = async function handler(req, res) {
     html: notificationHtml({ email, company, jobInput, resumeTitle, siteUrl, skippedReason }),
     text: notificationText({ email, company, jobInput, resumeTitle, siteUrl, skippedReason })
   };
+  // Only words you wrote go into the thank-you. Nothing the visitor typed is
+  // echoed back, so the form can't be used to deliver someone else's message.
+  const letter = buildThankYou(loadTemplate(), { videoUrl, siteUrl });
   const thankYou = {
     from,
     to: email,
-    subject: "Thanks for visiting — Christian Schlaefer",
-    html: thankYouHtml({ videoUrl, siteUrl }),
-    text: thankYouText({ videoUrl, siteUrl })
+    subject: letter.subject,
+    html: letter.html,
+    text: letter.text,
+    attachments: loadAttachments()
   };
 
   // Both at once. The notification matters most — it's how you get the lead.
@@ -201,34 +237,70 @@ function esc(value) {
 const wrap = (inner) =>
   `<div style="font-family: Georgia, 'Times New Roman', serif; font-size: 16px; line-height: 1.6; color: #1d2b3a; max-width: 560px;">${inner}</div>`;
 
-function thankYouHtml({ videoUrl, siteUrl }) {
-  const video = videoUrl
-    ? `<p>In the meantime, here's the short video walkthrough of how the site was built: <a href="${esc(videoUrl)}">watch the walkthrough</a>.</p>`
-    : `<p>I'll include a short video walkthrough of how the site was built when I follow up.</p>`;
-  return wrap(
-    `<p>Hi there,</p>` +
-    `<p>Thanks for taking the time to explore my interactive resume. I'll be in touch personally soon.</p>` +
-    video +
-    `<p>Just reply to this email any time — it comes straight to me. You can also <a href="${esc(siteUrl)}">revisit the site</a>.</p>` +
-    `<p>Best,<br>Christian Schlaefer</p>`
-  );
+// ---- The thank-you template (email/thank-you.txt) ----
+// Plain text, written like a normal email:
+//   • The first line "Subject: ..." sets the subject line.
+//   • A blank line starts a new paragraph; single line breaks are kept.
+//   • {{site}}  becomes your site's address
+//   • {{video}} becomes a line with your walkthrough link if
+//               WALKTHROUGH_VIDEO_URL is set, and disappears if it isn't.
+// Every web address is shown as itself rather than hidden behind words —
+// part of what keeps a first-contact email out of spam.
+
+function loadTemplate() {
+  try {
+    const text = fs.readFileSync(path.join(EMAIL_DIR, "thank-you.txt"), "utf8");
+    if (text.trim()) return text;
+  } catch (error) {
+    console.warn("submit-lead: email/thank-you.txt not readable — using the built-in wording");
+  }
+  return DEFAULT_TEMPLATE;
 }
 
-function thankYouText({ videoUrl, siteUrl }) {
-  return [
-    "Hi there,",
-    "",
-    "Thanks for taking the time to explore my interactive resume. I'll be in touch personally soon.",
-    "",
-    videoUrl
-      ? `In the meantime, here's the short video walkthrough of how the site was built: ${videoUrl}`
-      : "I'll include a short video walkthrough of how the site was built when I follow up.",
-    "",
-    `Just reply to this email any time — it comes straight to me. You can also revisit the site: ${siteUrl}`,
-    "",
-    "Best,",
-    "Christian Schlaefer"
-  ].join("\n");
+function buildThankYou(template, { videoUrl, siteUrl }) {
+  let lines = template.replace(/\r\n/g, "\n").split("\n");
+  let subject = "Thanks for checking out my resume";
+  const first = lines.findIndex((line) => line.trim() !== "");
+  if (first !== -1 && /^subject:/i.test(lines[first].trim())) {
+    subject = lines[first].trim().replace(/^subject:\s*/i, "").trim() || subject;
+    lines = lines.slice(first + 1);
+  }
+  const site = siteUrl.replace(/^https?:\/\//, "");
+  const video = videoUrl ? `Here's the short walkthrough of how I built the site: ${videoUrl}` : "";
+  const body = lines.join("\n")
+    .replace(/\{\{\s*site\s*\}\}/gi, site)
+    .replace(/\{\{\s*video\s*\}\}/gi, video)
+    .replace(/\n{3,}/g, "\n\n") // an empty {{video}} line shouldn't leave a gap
+    .trim();
+
+  const paragraphs = body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const html = paragraphs.map((p) => `<p>${linkify(esc(p)).replace(/\n/g, "<br>")}</p>`).join("\n");
+  return { subject: subject.replace(/[\r\n]+/g, " "), text: body, html };
+}
+
+// Turns web addresses (including bare domains like christianschlaefer.com)
+// into links whose visible text is the address itself.
+function linkify(escaped) {
+  return escaped.replace(/\b((?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<]*)?)/gi, (match) => {
+    if (match.includes("@")) return match;
+    const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+    return `<a href="${href}">${match}</a>`;
+  });
+}
+
+// Every PDF in the email/ folder rides along; none (or an unreadable one)
+// just means no attachment.
+function loadAttachments() {
+  try {
+    return fs.readdirSync(EMAIL_DIR)
+      .filter((name) => name.toLowerCase().endsWith(".pdf"))
+      .map((name) => ({ name, full: path.join(EMAIL_DIR, name) }))
+      .filter(({ full }) => fs.statSync(full).size <= MAX_ATTACHMENT_BYTES)
+      .map(({ name, full }) => ({ filename: name, content: fs.readFileSync(full), contentType: "application/pdf" }));
+  } catch (error) {
+    console.warn("submit-lead: no attachments (email/ folder not readable)");
+    return [];
+  }
 }
 
 function notificationHtml({ email, company, jobInput, resumeTitle, siteUrl, skippedReason }) {

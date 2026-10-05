@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/submit-lead.js": {
+      "includeFiles": "email/**"
+    }
+  }
+}

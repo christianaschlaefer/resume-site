@@ -128,6 +128,9 @@ Compare the compiled resume against the RESUME - BASE template:
   shows "Sending…", then the thank-you. Within a minute that address receives
   a thank-you FROM your Gmail (check spam the first time), with the video link
   if WALKTHROUGH_VIDEO_URL is set — and it appears in your Gmail Sent folder.
+  The wording matches email/thank-you.txt, and every PDF in email/ is attached.
+- After editing email/thank-you.txt on GitHub (or swapping the PDF), the next
+  submission reflects the change once Vercel finishes redeploying.
 - Your inbox receives "New resume lead: <company>" with the email, company,
   resume title shown, and what they typed. Hitting Reply addresses the visitor.
 - Reply to the thank-you from the test address: it threads in your inbox as a

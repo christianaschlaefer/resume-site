@@ -1,0 +1,15 @@
+Subject: Thanks for checking out my resume
+
+Hi,
+
+Thanks for taking the time to look through my interactive resume. I appreciate it, and I'll follow up with you personally soon.
+
+I've attached a one-page overview of how the site works, from the AI that tailors the timeline to the guardrails that keep it honest.
+
+{{video}}
+
+If it's easier, just reply here. It comes straight to my inbox.
+
+Best,
+Christian Schlaefer
+{{site}}
